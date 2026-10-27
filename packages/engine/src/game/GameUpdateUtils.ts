@@ -29,6 +29,19 @@ import {
  * instead (see PlayerImpl.toUpdate) and appear in PlayerUpdate objects only on
  * a player's first (full) emission.
  */
+function numberRecordEqual(
+  a?: Record<number, number>,
+  b?: Record<number, number>,
+): boolean {
+  if (a === b) return true;
+  if (a === undefined || b === undefined) return false;
+  const keys = Object.keys(a);
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every((key) => a[Number(key)] === b[Number(key)])
+  );
+}
+
 export function diffPlayerUpdate(
   prev: PlayerUpdate,
   next: PlayerUpdate,
@@ -64,6 +77,7 @@ export function diffPlayerUpdate(
     prev.lastDeleteUnitTick === next.lastDeleteUnitTick &&
     prev.isLobbyCreator === next.isLobbyCreator &&
     numberArrayEqual(prev.allies, next.allies) &&
+    numberRecordEqual(prev.diplomacy, next.diplomacy) &&
     numberArrayEqual(prev.targets, next.targets) &&
     stringArrayEqual(
       prev.outgoingAllianceRequests,
@@ -131,6 +145,10 @@ export function diffPlayerUpdate(
   );
   setIfDifferent("isLobbyCreator", prev.isLobbyCreator === next.isLobbyCreator);
   setIfDifferent("allies", numberArrayEqual(prev.allies, next.allies));
+  setIfDifferent(
+    "diplomacy",
+    numberRecordEqual(prev.diplomacy, next.diplomacy),
+  );
   setIfDifferent("targets", numberArrayEqual(prev.targets, next.targets));
   setIfDifferent(
     "outgoingAllianceRequests",

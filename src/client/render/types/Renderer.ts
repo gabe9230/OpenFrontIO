@@ -86,6 +86,7 @@ export interface PlayerState {
   spawnTile?: number;
   lastDeleteUnitTick: number;
   allies: number[];
+  diplomacy?: Record<number, number>;
   embargoes: number[];
   targets: number[];
   outgoingAttacks: AttackData[];

@@ -1,8 +1,8 @@
+import { diplomacyKey } from "@openfront/engine-api/game/Diplomacy";
 import { TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   PlayerProfile,
   PlayerType,
-  Relation,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { AllianceView } from "@openfront/engine-api/game/GameUpdates";
@@ -25,6 +25,7 @@ import {
 import { Platform } from "../../Platform";
 import { themeProvider } from "../../theme/ThemeProvider";
 import { TransformHandler } from "../../TransformHandler";
+import { SendDiplomacyIntentEvent } from "../../Transport";
 import { UserSettings } from "../../UserSettings";
 import {
   formatKeyForDisplay,
@@ -43,7 +44,6 @@ import { ShowPlayerChatEvent } from "./ChatModal";
 import { ShowPlayerEmojiMenuEvent } from "./EmojiTable";
 import { ImmunityBarVisibleEvent } from "./ImmunityTimer";
 import { CloseRadialMenuEvent } from "./RadialMenu";
-import "./RelationSmiley";
 import { SpawnBarVisibleEvent } from "./SpawnTimer";
 const soldierIconAquarius = assetUrl("images/SoldierIconAquarius.svg");
 const allianceIcon = assetUrl("images/AllianceIcon.svg");
@@ -51,8 +51,8 @@ const traitorIcon = assetUrl("images/TraitorIcon.svg");
 const warshipIcon = assetUrl("images/BattleshipIconWhite.svg");
 const emojiIcon = assetUrl("images/EmojiIconWhite.svg");
 const chatIcon = assetUrl("images/ChatIconWhite.svg");
-const requestAllianceIcon = assetUrl("images/AllianceIconWhite.svg");
-const breakAllianceIcon = assetUrl("images/TraitorIconWhite.svg");
+const requestAllianceIcon = assetUrl("images/DiplomacyUp.svg");
+const breakAllianceIcon = assetUrl("images/DiplomacyDown.svg");
 const targetIcon = assetUrl("images/TargetIconWhite.svg");
 const boatIcon = assetUrl("images/BoatIconWhite.svg");
 const cityIcon = assetUrl("images/CityIconWhite.svg");
@@ -170,6 +170,13 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
     this.eventBus.on(DoBreakAllianceEvent, (e) =>
       this.markActionTaken(e.tile, "breakAlliance"),
     );
+    this.eventBus.on(SendDiplomacyIntentEvent, (e) => {
+      if (e.recipient === this.player)
+        this.markActionTaken(
+          this.tile ?? undefined,
+          e.direction === "raise" ? "requestAlliance" : "breakAlliance",
+        );
+    });
     this.eventBus.on(DoTargetPlayerEvent, (e) =>
       this.markActionTaken(e.tile, "target"),
     );
@@ -289,8 +296,10 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
         const can = actions.interaction;
         this.playerActions = {
           player,
-          requestAlliance: can?.canSendAllianceRequest ?? false,
-          breakAlliance: can?.canBreakAlliance ?? false,
+          requestAlliance:
+            can?.canRaiseDiplomacy ?? can?.canSendAllianceRequest ?? false,
+          breakAlliance:
+            can?.canLowerDiplomacy ?? can?.canBreakAlliance ?? false,
           target: can?.canTarget ?? false,
           boat: actions.buildableUnits.some(
             (u) => u.type === UnitType.TransportShip && u.canBuild !== false,
@@ -320,31 +329,23 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
     return "text-white";
   }
 
-  private getRelationSmiley(
+  private renderDiplomacyState(
     player: PlayerView,
     myPlayer: PlayerView | null | undefined,
   ): TemplateResult | string {
-    if (!myPlayer || myPlayer === player || player.type() !== PlayerType.Nation)
-      return "";
-    const relation =
-      this.playerProfile?.relations[myPlayer.smallID()] ?? Relation.Neutral;
-    if (relation === Relation.Neutral) return "";
-    return html`<relation-smiley .relation=${relation}></relation-smiley>`;
-  }
-
-  private getRelationName(relation: Relation): string {
-    switch (relation) {
-      case Relation.Hostile:
-        return translateText("relation.hostile");
-      case Relation.Distrustful:
-        return translateText("relation.distrustful");
-      case Relation.Neutral:
-        return translateText("relation.neutral");
-      case Relation.Friendly:
-        return translateText("relation.friendly");
-      default:
-        return translateText("relation.default");
-    }
+    if (!myPlayer || myPlayer === player) return "";
+    const state = myPlayer.diplomacyState(player);
+    const colors = [
+      "text-red-400",
+      "text-orange-300",
+      "text-slate-300",
+      "text-emerald-400",
+    ];
+    return html`<span
+      class="text-xs font-semibold whitespace-nowrap ${colors[state]}"
+      data-diplomacy=${state}
+      >${translateText(`diplomacy.${diplomacyKey(state)}`)}</span
+    >`;
   }
 
   private displayUnitCount(player: PlayerView, type: UnitType, icon: string) {
@@ -364,6 +365,7 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
 
   private allianceExpirationText(alliance: AllianceView) {
     const { expiresAt } = alliance;
+    if (expiresAt === Number.MAX_SAFE_INTEGER) return "";
     const remainingTicks = expiresAt - this.game.ticks();
     let remainingSeconds = 0;
     if (remainingTicks > 0) {
@@ -705,7 +707,7 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
                 >${player.displayName()}</span
               >
             </div>
-            ${this.getRelationSmiley(player, myPlayer)}
+            ${this.renderDiplomacyState(player, myPlayer)}
             ${
               playerTeam !== "" && player.type() !== PlayerType.Bot
                 ? html`<div
@@ -778,19 +780,21 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
       buttons.push(
         this.renderShortcutButton(
           requestAllianceIcon,
-          translateText("player_panel.send_alliance"),
+          translateText("diplomacy.raise"),
           keybinds.requestAlliance,
           () =>
-            this.eventBus.emit(new DoRequestAllianceEvent(tile, player.id())),
+            this.eventBus.emit(new SendDiplomacyIntentEvent(player, "raise")),
         ),
       );
-    } else if (can?.breakAlliance) {
+    }
+    if (can?.breakAlliance) {
       buttons.push(
         this.renderShortcutButton(
           breakAllianceIcon,
-          translateText("player_panel.break_alliance"),
+          translateText("diplomacy.lower"),
           keybinds.breakAlliance,
-          () => this.eventBus.emit(new DoBreakAllianceEvent(tile, player.id())),
+          () =>
+            this.eventBus.emit(new SendDiplomacyIntentEvent(player, "lower")),
         ),
       );
     }

@@ -22,6 +22,7 @@ export class AllianceRequestExecution implements Execution {
   constructor(
     private requestor: Player,
     private recipientID: PlayerID,
+    private permanent: boolean = false,
   ) {}
 
   init(mg: Game, ticks: number): void {
@@ -46,7 +47,7 @@ export class AllianceRequestExecution implements Execution {
         // If the recipient already has pending alliance request,
         // then accept it instead of creating a new one.
         this.active = false;
-        incoming.accept();
+        incoming.accept(this.permanent);
 
         // Update player relations
         this.requestor.updateRelation(recipient, 100);
@@ -61,7 +62,10 @@ export class AllianceRequestExecution implements Execution {
         // Cancel incoming nukes between players
         this.cancelNukesBetweenAlliedPlayers(recipient);
       } else {
-        this.req = this.requestor.createAllianceRequest(recipient);
+        this.req = this.requestor.createAllianceRequest(
+          recipient,
+          this.permanent,
+        );
       }
     }
   }
@@ -182,6 +186,7 @@ export class AllianceRequestExecution implements Execution {
       req: this.req === null ? null : w.allianceRequest(this.req),
       requestor: w.player(this.requestor),
       recipientID: this.recipientID,
+      permanent: this.permanent,
     });
   }
 
@@ -192,6 +197,7 @@ export class AllianceRequestExecution implements Execution {
       s.req === null ? null : r.allianceRequest<AllianceRequest>(s.req);
     this.requestor = r.player(s.requestor);
     this.recipientID = s.recipientID;
+    this.permanent = s.permanent;
   }
 }
 
@@ -201,12 +207,14 @@ const AllianceRequestStateSchema = z.object({
   req: zRef().nullable(),
   requestor: zPlayerRef(),
   recipientID: z.string(),
+  permanent: z.boolean(),
 });
 type AllianceRequestState = z.infer<typeof AllianceRequestStateSchema>;
 
 export const AllianceRequestExecutionSnapshot = execSnapshotType({
   name: "AllianceRequest",
-  version: 1,
+  version: 2,
+  migrations: { 1: (s) => ({ ...s, permanent: false }) },
   schema: AllianceRequestStateSchema,
   cls: () => AllianceRequestExecution,
 });

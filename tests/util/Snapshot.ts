@@ -143,6 +143,7 @@ export const DERIVED_FIELDS = new Set<string>([
   "borderNbuf",
   // PlayerImpl
   "lastSentUpdate",
+  "_diplomacyView",
   "myUnitsMemo",
   "myUnitCountMemo",
   "myUnitsOwnedMemo",

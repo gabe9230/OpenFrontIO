@@ -1,3 +1,4 @@
+import { DiplomacyState } from "@openfront/engine-api/game/Diplomacy";
 import { TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   AllianceInfo,
@@ -186,6 +187,8 @@ export class PlayerImpl implements Player {
   private sentDonations: Donation[] = [];
 
   private relations = new Map<Player, number>();
+  public _diplomacy = new Map<Player, DiplomacyState>();
+  public _diplomacyView: Record<number, number> | null = null;
 
   private lastDeleteUnitTick: Tick = -1;
   private lastEmbargoAllTick: Tick = -1;
@@ -398,6 +401,9 @@ export class PlayerImpl implements Player {
       piracyGold: this._piracyGold,
       goldEarned: this._goldEarned,
       troops: this.troops(),
+      diplomacy: (this._diplomacyView ??= Object.fromEntries(
+        [...this._diplomacy].map(([p, state]) => [p.smallID(), state]),
+      )),
       allies: allies,
       embargoes: embargoes,
       isTraitor: this.isTraitor(),
@@ -777,6 +783,25 @@ export class PlayerImpl implements Player {
     return this.allianceWith(other) !== null;
   }
 
+  diplomacyState(other: Player): DiplomacyState {
+    if (other === this || this.isAlliedWith(other) || this.isOnSameTeam(other))
+      return DiplomacyState.Allied;
+    return this._diplomacy.get(other) ?? DiplomacyState.Neutral;
+  }
+
+  canPirate(other: Player): boolean {
+    return (
+      other !== this &&
+      !this.isOnSameTeam(other) &&
+      this.diplomacyState(other) <= DiplomacyState.ColdWar
+    );
+  }
+
+  declareWar(other: Player): void {
+    if (other !== this && !this.isOnSameTeam(other))
+      this.mg.setDiplomacyState(this, other, DiplomacyState.War);
+  }
+
   allianceWith(other: Player): MutableAlliance | null {
     if (other === this) {
       return null;
@@ -813,7 +838,10 @@ export class PlayerImpl implements Player {
   }
 
   canSendAllianceRequest(other: Player): boolean {
-    if (this.mg.config().disableAlliances()) {
+    if (
+      this.mg.config().disableAlliances() &&
+      this.diplomacyState(other) >= DiplomacyState.Neutral
+    ) {
       return false;
     }
     if (other === this) {
@@ -847,7 +875,7 @@ export class PlayerImpl implements Player {
     }
 
     const recent = this.pastOutgoingAllianceRequests
-      .filter((ar) => ar.recipient() === other)
+      .filter((ar) => ar.recipient() === other && ar.status() !== "accepted")
       .sort((a, b) => b.createdAt() - a.createdAt());
 
     if (recent.length === 0) {
@@ -929,11 +957,18 @@ export class PlayerImpl implements Player {
     return this._betrayalCount;
   }
 
-  createAllianceRequest(recipient: Player): AllianceRequest | null {
+  createAllianceRequest(
+    recipient: Player,
+    permanent = false,
+  ): AllianceRequest | null {
     if (this.isAlliedWith(recipient)) {
       throw new Error(`cannot create alliance request, already allies`);
     }
-    return this.mg.createAllianceRequest(this, recipient satisfies Player);
+    return this.mg.createAllianceRequest(
+      this,
+      recipient satisfies Player,
+      permanent,
+    );
   }
 
   relation(other: Player): Relation {
@@ -1859,6 +1894,10 @@ export class PlayerImpl implements Player {
   hash(): number {
     return (
       simpleHash(this.id()) * (this.troops() + this.numTilesOwned()) +
+      [...this._diplomacy].reduce(
+        (sum, [p, state]) => sum + p.smallID() * (state + 1),
+        0,
+      ) +
       this._units.reduce((acc, unit) => acc + unit.hash(), 0)
     );
   }
@@ -1925,11 +1964,14 @@ export class PlayerImpl implements Player {
     player: Player,
     treatAFKFriendly: boolean = false,
   ): boolean {
+    const protectedTeammate =
+      this.isOnSameTeam(player) &&
+      (!player.isDisconnected() || treatAFKFriendly);
     if (this.type() !== PlayerType.Human) {
       // Only human attackers respect PVP immunity
-      return !this.isFriendly(player, treatAFKFriendly);
+      return player !== this && !protectedTeammate;
     }
-    return !player.isImmune() && !this.isFriendly(player, treatAFKFriendly);
+    return player !== this && !player.isImmune() && !protectedTeammate;
   }
 
   public canAttack(tile: TileRef): boolean {
@@ -2014,6 +2056,7 @@ export class PlayerImpl implements Player {
         tick: d.tick,
       })),
       relations: [...this.relations].map(([p, r]) => [w.player(p), r]),
+      diplomacy: [...this._diplomacy].map(([p, state]) => [w.player(p), state]),
       lastDeleteUnitTick: this.lastDeleteUnitTick,
       lastEmbargoAllTick: this.lastEmbargoAllTick,
       incomingAttacks: this._incomingAttacks.map((a) => w.attack(a)),
@@ -2088,6 +2131,10 @@ export class PlayerImpl implements Player {
     this.sentDonations = s.sentDonations.map(
       (d) => new Donation(r.player(d.recipient), d.tick),
     );
+    this._diplomacy = new Map(
+      s.diplomacy.map(([p, state]) => [r.player(p), state]),
+    );
+    this._diplomacyView = null;
     this.relations = new Map(
       s.relations.map(([p, rel]) => [r.player(p), rel] as const),
     );
@@ -2117,7 +2164,8 @@ export class PlayerImpl implements Player {
 
 export const PlayerSnapshot = snapshotType({
   name: "Player",
-  version: 1,
+  version: 2,
+  migrations: { 1: (s) => ({ ...s, diplomacy: [] }) },
   schema: z.object({
     smallID: zInt(),
     info: PlayerInfoSchema,
@@ -2160,6 +2208,7 @@ export const PlayerSnapshot = snapshotType({
     outgoingQuickChats: z.array(z.tuple([zInt(), zInt()])),
     sentDonations: z.array(z.object({ recipient: zPlayerRef(), tick: zInt() })),
     relations: z.array(z.tuple([zPlayerRef(), zNum()])),
+    diplomacy: z.array(z.tuple([zPlayerRef(), z.nativeEnum(DiplomacyState)])),
     lastDeleteUnitTick: zInt(),
     lastEmbargoAllTick: zInt(),
     incomingAttacks: z.array(zRef()),

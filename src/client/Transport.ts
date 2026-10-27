@@ -73,6 +73,13 @@ export class SendAllianceRequestIntentEvent implements GameEvent {
   ) {}
 }
 
+export class SendDiplomacyIntentEvent implements GameEvent {
+  constructor(
+    public readonly recipient: PlayerView,
+    public readonly direction: "raise" | "lower",
+  ) {}
+}
+
 export class SendBreakAllianceIntentEvent implements GameEvent {
   constructor(
     public readonly requestor: PlayerView,
@@ -297,6 +304,13 @@ export class Transport {
 
     this.subscribe(SendAllianceRequestIntentEvent, (e) =>
       this.onSendAllianceRequest(e),
+    );
+    this.subscribe(SendDiplomacyIntentEvent, (e) =>
+      this.sendIntent({
+        type: "diplomacy",
+        recipient: e.recipient.id(),
+        direction: e.direction,
+      }),
     );
     this.subscribe(SendAllianceRejectIntentEvent, (e) =>
       this.onAllianceRejectUIEvent(e),

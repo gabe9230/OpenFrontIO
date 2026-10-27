@@ -1,3 +1,4 @@
+import { DiplomacyState } from "@openfront/engine-api/game/Diplomacy";
 import { Tick } from "@openfront/engine-api/game/GameTypes";
 import {
   AllianceRequestUpdate,
@@ -24,7 +25,20 @@ export class AllianceRequestImpl implements AllianceRequest {
     private recipient_: Player,
     private tickCreated: number,
     private game: GameImpl,
+    private requestedState_: DiplomacyState = DiplomacyState.Allied,
+    private previousState_: DiplomacyState = DiplomacyState.Neutral,
+    private permanent_: boolean = false,
   ) {}
+
+  requestedState(): DiplomacyState {
+    return this.requestedState_;
+  }
+  previousState(): DiplomacyState {
+    return this.previousState_;
+  }
+  permanent(): boolean {
+    return this.permanent_;
+  }
 
   status(): "pending" | "accepted" | "rejected" {
     return this.status_;
@@ -42,11 +56,23 @@ export class AllianceRequestImpl implements AllianceRequest {
     return this.tickCreated;
   }
 
-  accept(): void {
+  accept(permanent = false): void {
+    if (this.status_ !== "pending") return;
+    if (
+      this.requestor_.diplomacyState(this.recipient_) !== this.previousState_ ||
+      this.requestedState_ !== this.previousState_ + 1 ||
+      (!this.requestor_.isAlive() && this.requestor_.hasSpawned()) ||
+      (!this.recipient_.isAlive() && this.recipient_.hasSpawned())
+    ) {
+      this.reject();
+      return;
+    }
+    this.permanent_ ||= permanent;
     this.status_ = "accepted";
     this.game.acceptAllianceRequest(this);
   }
   reject(): void {
+    if (this.status_ !== "pending") return;
     this.status_ = "rejected";
     this.game.rejectAllianceRequest(this);
   }
@@ -57,6 +83,7 @@ export class AllianceRequestImpl implements AllianceRequest {
       requestorID: this.requestor_.smallID(),
       recipientID: this.recipient_.smallID(),
       createdAt: this.tickCreated,
+      requestedState: this.requestedState_,
     };
   }
 
@@ -66,6 +93,9 @@ export class AllianceRequestImpl implements AllianceRequest {
       recipient: w.player(this.recipient_),
       createdAt: this.tickCreated,
       status: this.status_,
+      requestedState: this.requestedState_,
+      previousState: this.previousState_,
+      permanent: this.permanent_,
     };
   }
 
@@ -76,17 +106,31 @@ export class AllianceRequestImpl implements AllianceRequest {
     this.recipient_ = r.player(s.recipient);
     this.tickCreated = s.createdAt;
     this.status_ = s.status;
+    this.requestedState_ = s.requestedState;
+    this.previousState_ = s.previousState;
+    this.permanent_ = s.permanent;
   }
 }
 
 export const AllianceRequestSnapshot = snapshotType({
   name: "AllianceRequest",
-  version: 1,
+  version: 2,
+  migrations: {
+    1: (s) => ({
+      ...s,
+      requestedState: DiplomacyState.Allied,
+      previousState: DiplomacyState.Neutral,
+      permanent: false,
+    }),
+  },
   schema: z.object({
     requestor: zPlayerRef(),
     recipient: zPlayerRef(),
     createdAt: zInt(),
     status: z.enum(["pending", "accepted", "rejected"]),
+    requestedState: z.nativeEnum(DiplomacyState),
+    previousState: z.nativeEnum(DiplomacyState),
+    permanent: z.boolean(),
   }),
 });
 export type AllianceRequestState = z.infer<

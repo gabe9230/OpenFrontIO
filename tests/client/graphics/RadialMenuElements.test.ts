@@ -375,116 +375,48 @@ describe("RadialMenuElements", () => {
       mockGame.owner = vi.fn(() => allyPlayer);
 
       const subMenu = rootMenuElement.subMenu!(mockParams);
-      const allyMenu = subMenu.find((item) => item.id === "ally_break");
+      const allyMenu = subMenu.find((item) => item.id === "diplomacy_lower");
 
       expect(allyMenu).toBeDefined();
     });
 
-    it("should show extend element when inAllianceExtensionWindow is true", () => {
-      const allyPlayer = {
-        id: () => 2,
-        isAlliedWith: vi.fn(() => true),
-        isPlayer: vi.fn(() => true),
-      } as unknown as PlayerView;
-      mockParams.selected = allyPlayer;
-      mockGame.owner = vi.fn(() => allyPlayer);
-      mockPlayerActions.interaction = {
-        ...mockPlayerActions.interaction,
-        canBreakAlliance: true,
-        allianceInfo: {
-          expiresAt: 100,
-          inExtensionWindow: true,
-          myPlayerAgreedToExtend: true,
-          otherAgreedToExtend: false,
-          canExtend: false,
-        },
-      };
-
-      const subMenu = rootMenuElement.subMenu!(mockParams);
-      const extendMenu = subMenu.find((item) => item.id === "ally_extend");
-
-      expect(extendMenu).toBeDefined();
+    it("replaces alliance and extension buttons with two diplomacy arrows", () => {
+      mockGame.owner = vi.fn(
+        () => ({ ...mockPlayer, id: () => 2 }) as unknown as PlayerView,
+      );
+      const menu = rootMenuElement.subMenu!(mockParams);
+      expect(menu.some((item) => item.id === "diplomacy_raise")).toBe(true);
+      expect(menu.some((item) => item.id === "diplomacy_lower")).toBe(true);
+      expect(
+        menu.some((item) =>
+          ["ally_request", "ally_break", "ally_extend"].includes(item.id),
+        ),
+      ).toBe(false);
     });
-
-    it("should not show extend element when inAllianceExtensionWindow is false", () => {
-      const allyPlayer = {
-        id: () => 2,
-        isAlliedWith: vi.fn(() => true),
-        isPlayer: vi.fn(() => true),
-      } as unknown as PlayerView;
-      mockParams.selected = allyPlayer;
-      mockGame.owner = vi.fn(() => allyPlayer);
-      mockPlayerActions.interaction = {
-        ...mockPlayerActions.interaction,
-        canBreakAlliance: true,
-        allianceInfo: {
-          expiresAt: 100,
-          inExtensionWindow: false,
-          myPlayerAgreedToExtend: false,
-          otherAgreedToExtend: false,
-          canExtend: false,
-        },
-      };
-
-      const subMenu = rootMenuElement.subMenu!(mockParams);
-      const extendMenu = subMenu.find((item) => item.id === "ally_extend");
-
-      expect(extendMenu).toBeUndefined();
-    });
-
-    it("should show extend element as disabled when canExtend is false", () => {
-      const allyPlayer = {
-        id: () => 2,
-        isAlliedWith: vi.fn(() => true),
-        isPlayer: vi.fn(() => true),
-      } as unknown as PlayerView;
-      mockParams.selected = allyPlayer;
-      mockGame.owner = vi.fn(() => allyPlayer);
-      mockPlayerActions.interaction = {
-        ...mockPlayerActions.interaction,
-        canBreakAlliance: true,
-        allianceInfo: {
-          expiresAt: 100,
-          inExtensionWindow: true,
-          myPlayerAgreedToExtend: true,
-          otherAgreedToExtend: false,
-          canExtend: false,
-        },
-      };
-
-      const subMenu = rootMenuElement.subMenu!(mockParams);
-      const extendMenu = subMenu.find((item) => item.id === "ally_extend");
-
-      expect(extendMenu).toBeDefined();
-      expect(extendMenu!.disabled(mockParams)).toBe(true);
-    });
-
-    it("should show extend element as enabled when canExtend is true", () => {
-      const allyPlayer = {
-        id: () => 2,
-        isAlliedWith: vi.fn(() => true),
-        isPlayer: vi.fn(() => true),
-      } as unknown as PlayerView;
-      mockParams.selected = allyPlayer;
-      mockGame.owner = vi.fn(() => allyPlayer);
-      mockPlayerActions.interaction = {
-        ...mockPlayerActions.interaction,
-        canBreakAlliance: true,
-        allianceInfo: {
-          expiresAt: 100,
-          inExtensionWindow: true,
-          myPlayerAgreedToExtend: false,
-          otherAgreedToExtend: false,
-          canExtend: true,
-        },
-      };
-
-      const subMenu = rootMenuElement.subMenu!(mockParams);
-      const extendMenu = subMenu.find((item) => item.id === "ally_extend");
-
-      expect(extendMenu).toBeDefined();
-      expect(extendMenu!.disabled(mockParams)).toBe(false);
-    });
+    it.each([true, false])(
+      "respects independent raise/lower permissions: %s",
+      (enabled) => {
+        mockGame.owner = vi.fn(
+          () => ({ ...mockPlayer, id: () => 2 }) as unknown as PlayerView,
+        );
+        mockPlayerActions.interaction = {
+          ...mockPlayerActions.interaction!,
+          canRaiseDiplomacy: enabled,
+          canLowerDiplomacy: enabled,
+        };
+        const menu = rootMenuElement.subMenu!(mockParams);
+        expect(
+          menu
+            .find((item) => item.id === "diplomacy_raise")!
+            .disabled(mockParams),
+        ).toBe(!enabled);
+        expect(
+          menu
+            .find((item) => item.id === "diplomacy_lower")!
+            .disabled(mockParams),
+        ).toBe(!enabled);
+      },
+    );
   });
 
   describe("Menu element actions", () => {

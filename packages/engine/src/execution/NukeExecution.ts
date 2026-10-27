@@ -164,6 +164,9 @@ export class NukeExecution implements Execution {
       magnitude,
       threshold: this.mg.config().nukeAllianceBreakThreshold(),
     });
+    const directTarget = this.mg.owner(this.dst);
+    if (directTarget.isPlayer())
+      playersToBreakAllianceWith.add(directTarget.smallID());
 
     // Automatically reject incoming alliance requests.
     for (const incoming of this.player.incomingAllianceRequests()) {
@@ -185,13 +188,9 @@ export class NukeExecution implements Execution {
         .find((ar) => ar.requestor() === this.player);
       if (outgoingAllianceRequest) {
         outgoingAllianceRequest.reject();
-        continue;
       }
 
-      const alliance = this.player.allianceWith(attackedPlayer);
-      if (alliance !== null) {
-        this.player.breakAlliance(alliance);
-      }
+      this.player.declareWar(attackedPlayer);
       if (attackedPlayer !== this.player) {
         attackedPlayer.updateRelation(this.player, -100);
       }

@@ -1,3 +1,4 @@
+import { DiplomacyState } from "@openfront/engine-api/game/Diplomacy";
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   Difficulty,
@@ -53,6 +54,7 @@ export class AttackExecution implements Execution {
   // Reusable neighbor buffers to avoid closures/allocation in hot loops.
   private nbuf: TileRef[] = [0, 0, 0, 0];
   private nbuf2: TileRef[] = [0, 0, 0, 0];
+  private wasAlliedAtCreation: boolean;
 
   constructor(
     private startTroops: number | null = null,
@@ -60,7 +62,11 @@ export class AttackExecution implements Execution {
     private _targetID: PlayerID | null,
     private sourceTile: TileRef | null = null,
     private removeTroops: boolean = true,
-  ) {}
+  ) {
+    this.wasAlliedAtCreation = _owner
+      .allies()
+      .some((ally) => ally.id() === _targetID);
+  }
 
   public targetID(): PlayerID | null {
     return this._targetID;
@@ -96,10 +102,23 @@ export class AttackExecution implements Execution {
       return;
     }
 
-    // ALLIANCE CHECK — block attacks on friendly (ally or same team)
+    // Keep team protection and newly accepted peace; deliberate human
+    // attacks on existing allies declare War and apply betrayal below.
     if (this.target.isPlayer()) {
       const targetPlayer = this.target as Player;
-      if (this._owner.isFriendly(targetPlayer)) {
+      // A proposal accepted after this attack was queued must stop that
+      // attack. A human can still deliberately invade an existing ally.
+      if (
+        this._owner.isAlliedWith(targetPlayer) &&
+        (!this.wasAlliedAtCreation || this._owner.type() !== PlayerType.Human)
+      ) {
+        this.active = false;
+        return;
+      }
+      if (
+        this._owner.isOnSameTeam(targetPlayer) &&
+        !targetPlayer.isDisconnected()
+      ) {
         console.warn(
           `${this._owner.displayName()} cannot attack ${targetPlayer.displayName()} because they are friendly (allied or same team)`,
         );
@@ -187,6 +206,9 @@ export class AttackExecution implements Execution {
       this.retreat();
       return;
     }
+
+    if (this.target.isPlayer() && this.attack.troops() > 0)
+      this._owner.declareWar(this.target);
 
     // Only now is it known how large the attack the defender actually faces
     // is: a big assault is built by clicking repeatedly, and each click's
@@ -299,7 +321,11 @@ export class AttackExecution implements Execution {
       return;
     }
 
-    if (targetPlayer && this._owner.isFriendly(targetPlayer)) {
+    if (
+      targetPlayer &&
+      this._owner.diplomacyState(targetPlayer) !== DiplomacyState.War &&
+      !(this._owner.isOnSameTeam(targetPlayer) && targetPlayer.isDisconnected())
+    ) {
       // In this case a new alliance was created AFTER the attack started.
       this.retreat();
       return;
@@ -519,6 +545,7 @@ export class AttackExecution implements Execution {
       targetID: this._targetID,
       sourceTile: this.sourceTile,
       removeTroops: this.removeTroops,
+      wasAlliedAtCreation: this.wasAlliedAtCreation,
     });
   }
 
@@ -545,6 +572,7 @@ export class AttackExecution implements Execution {
     this._targetID = s.targetID;
     this.sourceTile = s.sourceTile;
     this.removeTroops = s.removeTroops;
+    this.wasAlliedAtCreation = s.wasAlliedAtCreation;
   }
 }
 
@@ -569,12 +597,14 @@ const AttackExecutionStateSchema = z.object({
   targetID: z.string().nullable(),
   sourceTile: zTile().nullable(),
   removeTroops: z.boolean(),
+  wasAlliedAtCreation: z.boolean(),
 });
 type AttackExecutionState = z.infer<typeof AttackExecutionStateSchema>;
 
 export const AttackExecutionSnapshot = execSnapshotType({
   name: "Attack",
-  version: 1,
+  version: 2,
+  migrations: { 1: (s) => ({ ...s, wasAlliedAtCreation: false }) },
   schema: AttackExecutionStateSchema,
   cls: () => AttackExecution,
 });

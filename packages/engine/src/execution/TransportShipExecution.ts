@@ -1,3 +1,4 @@
+import { DiplomacyState } from "@openfront/engine-api/game/Diplomacy";
 import { TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   MessageType,
@@ -140,6 +141,8 @@ export class TransportShipExecution implements Execution {
     }
 
     this.src = src;
+    if (this.target.isPlayer() && this.troops > 0)
+      this.attacker.declareWar(this.target);
 
     this.boat = this.attacker.buildUnit(UnitType.TransportShip, this.src, {
       troops: this.troops,
@@ -211,6 +214,13 @@ export class TransportShipExecution implements Execution {
       this.motionPlanDst = null; // Force motion plan re-recording
     }
 
+    if (
+      this.target.isPlayer() &&
+      this.attacker.diplomacyState(this.target) !== DiplomacyState.War &&
+      !(this.attacker.isOnSameTeam(this.target) && this.target.isDisconnected())
+    ) {
+      this.boat.updateTransportShipState({ isRetreating: true });
+    }
     // Auto-retreat if destination was destroyed by nuke (turned to water)
     // Checked every tick (not just on graph rebuild) because graph rebuilds
     // are throttled and the tile may already be water before the version bumps.

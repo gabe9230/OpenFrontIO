@@ -1,3 +1,4 @@
+import { DiplomacyState } from "@openfront/engine-api/game/Diplomacy";
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   AllianceInfo,
@@ -155,7 +156,10 @@ export interface Attack {
 }
 
 export interface AllianceRequest {
-  accept(): void;
+  requestedState(): DiplomacyState;
+  previousState(): DiplomacyState;
+  permanent(): boolean;
+  accept(permanent?: boolean): void;
   reject(): void;
   requestor(): Player;
   recipient(): Player;
@@ -440,7 +444,13 @@ export interface Player extends PlayerLike {
   canSendAllianceRequest(other: Player): boolean;
   breakAlliance(alliance: Alliance): void;
   removeAllAlliances(): void;
-  createAllianceRequest(recipient: Player): AllianceRequest | null;
+  createAllianceRequest(
+    recipient: Player,
+    permanent?: boolean,
+  ): AllianceRequest | null;
+  diplomacyState(other: Player): DiplomacyState;
+  canPirate(other: Player): boolean;
+  declareWar(other: Player): void;
   betrayals(): number;
 
   // Targeting
@@ -544,6 +554,12 @@ export interface Game extends GameLike {
   teamSpawnArea(team: Team): SpawnArea | undefined;
 
   // Alliances
+  setDiplomacyState(
+    first: Player,
+    second: Player,
+    state: DiplomacyState,
+    permanent?: boolean,
+  ): void;
   expireAlliance(alliance: Alliance): void;
 
   // Immunity timer

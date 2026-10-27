@@ -1,3 +1,4 @@
+import { DiplomacyState } from "@openfront/engine-api/game/Diplomacy";
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   Cell,
@@ -121,6 +122,65 @@ export function createGame(
 export type CellString = string;
 
 export class GameImpl implements Game {
+  setDiplomacyState(
+    first: Player,
+    second: Player,
+    state: DiplomacyState,
+    permanent = true,
+  ): void {
+    if (first === second || first.isOnSameTeam(second)) return;
+    if (
+      !Number.isInteger(state) ||
+      state < DiplomacyState.War ||
+      state > DiplomacyState.Allied
+    )
+      throw new Error("Invalid diplomacy state");
+    const previous = first.diplomacyState(second);
+    if (previous === state) {
+      if (state === DiplomacyState.War)
+        for (const request of [...this.allianceRequests]) {
+          if (
+            (request.requestor() === first && request.recipient() === second) ||
+            (request.requestor() === second && request.recipient() === first)
+          )
+            request.reject();
+        }
+      return;
+    }
+    const alliance = first.allianceWith(second);
+    if (state < DiplomacyState.Allied && alliance)
+      this.breakAlliance(first, alliance);
+    (first as PlayerImpl)._diplomacy.set(second, state);
+    (second as PlayerImpl)._diplomacy.set(first, state);
+    (first as PlayerImpl)._diplomacyView = null;
+    (second as PlayerImpl)._diplomacyView = null;
+    if (state === DiplomacyState.Allied && !alliance) {
+      const created = new AllianceImpl(
+        this,
+        first as PlayerImpl,
+        second as PlayerImpl,
+        this._ticks,
+        this.nextAllianceID++,
+        permanent,
+      );
+      (first as PlayerImpl)._alliances.push(created);
+      (second as PlayerImpl)._alliances.push(created);
+      this.stats().allianceFormed(first);
+      this.stats().allianceFormed(second);
+    }
+    for (const request of [...this.allianceRequests]) {
+      if (
+        request.status() === "pending" &&
+        ((request.requestor() === first && request.recipient() === second) ||
+          (request.requestor() === second && request.recipient() === first))
+      )
+        request.reject();
+    }
+    if (state >= DiplomacyState.Neutral) {
+      first.endTemporaryEmbargo(second);
+      second.endTemporaryEmbargo(first);
+    }
+  }
   private _ticks = 0;
   private startTick: number | null = null;
 
@@ -427,6 +487,7 @@ export class GameImpl implements Game {
   createAllianceRequest(
     requestor: Player,
     recipient: Player,
+    permanent = false,
   ): AllianceRequest | null {
     if (requestor.isAlliedWith(recipient)) {
       console.log("cannot request alliance, already allied");
@@ -445,10 +506,19 @@ export class GameImpl implements Game {
       .find((ar) => ar.requestor() === recipient);
     if (correspondingReq !== undefined) {
       console.log(`got corresponding alliance requests, accepting`);
-      correspondingReq.accept();
+      correspondingReq.accept(permanent);
       return null;
     }
-    const ar = new AllianceRequestImpl(requestor, recipient, this._ticks, this);
+    const previous = requestor.diplomacyState(recipient);
+    const ar = new AllianceRequestImpl(
+      requestor,
+      recipient,
+      this._ticks,
+      this,
+      previous + 1,
+      previous,
+      permanent,
+    );
     this.allianceRequests.push(ar);
     this.addUpdate(ar.toUpdate());
     return ar;
@@ -469,18 +539,12 @@ export class GameImpl implements Game {
       );
     }
 
-    // Create and register the new alliance
-    const alliance = new AllianceImpl(
-      this,
-      requestor as PlayerImpl,
-      recipient as PlayerImpl,
-      this._ticks,
-      this.nextAllianceID++,
+    this.setDiplomacyState(
+      requestor,
+      recipient,
+      request.requestedState(),
+      request.permanent(),
     );
-    (alliance.requestor() as PlayerImpl)._alliances.push(alliance);
-    (alliance.recipient() as PlayerImpl)._alliances.push(alliance);
-    this.stats().allianceFormed(requestor);
-    this.stats().allianceFormed(recipient);
     (request.requestor() as PlayerImpl).pastOutgoingAllianceRequests.push(
       request,
     );
@@ -1022,6 +1086,10 @@ export class GameImpl implements Game {
     const recipient = alliance.recipient() as PlayerImpl;
     requestor._alliances = requestor._alliances.filter((a) => a !== alliance);
     recipient._alliances = recipient._alliances.filter((a) => a !== alliance);
+    requestor._diplomacy.delete(recipient);
+    recipient._diplomacy.delete(requestor);
+    requestor._diplomacyView = null;
+    recipient._diplomacyView = null;
   }
 
   public isSpawnImmunityActive(): boolean {

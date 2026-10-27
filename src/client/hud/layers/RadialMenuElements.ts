@@ -31,7 +31,6 @@ import {
   BuildUnitIntentEvent,
   SendUpgradeStructureIntentEvent,
 } from "../../Transport";
-const allianceIcon = assetUrl("images/AllianceIconWhite.svg");
 const boatIcon = assetUrl("images/BoatIconWhite.svg");
 const buildIcon = assetUrl("images/BuildIconWhite.svg");
 const chatIcon = assetUrl("images/ChatIconWhite.svg");
@@ -41,7 +40,6 @@ const emojiIcon = assetUrl("images/EmojiIconWhite.svg");
 const infoIcon = assetUrl("images/InfoIcon.svg");
 const swordIcon = assetUrl("images/SwordIconWhite.svg");
 const targetIcon = assetUrl("images/TargetIconWhite.svg");
-const traitorIcon = assetUrl("images/TraitorIconWhite.svg");
 const xIcon = assetUrl("images/XIcon.svg");
 
 export interface MenuElementParams {
@@ -215,72 +213,34 @@ const allyEmbargoElement: MenuElement = {
   },
 };
 
-const allyRequestElement: MenuElement = {
-  id: "ally_request",
-  name: "request",
-  disabled: (params: MenuElementParams) =>
-    !params.playerActions?.interaction?.canSendAllianceRequest,
-  displayed: (params: MenuElementParams) =>
-    !params.playerActions?.interaction?.canBreakAlliance,
+const diplomacyRaiseElement: MenuElement = {
+  displayed: (p) => p.selected !== null && p.selected.id() !== p.myPlayer.id(),
+  id: "diplomacy_raise",
+  name: "raise_relations",
   color: COLORS.ally,
-  icon: allianceIcon,
-  action: (params: MenuElementParams) => {
-    params.playerActionHandler.handleAllianceRequest(
-      params.myPlayer,
-      params.selected!,
-    );
-    params.closeMenu();
+  icon: assetUrl("images/DiplomacyUp.svg"),
+  tooltipKeys: [{ key: "diplomacy.raise", className: "" }],
+  disabled: (p) =>
+    !(
+      p.playerActions.interaction?.canRaiseDiplomacy ??
+      p.playerActions.interaction?.canSendAllianceRequest
+    ),
+  action: (p) => {
+    p.playerActionHandler.handleDiplomacy(p.selected!, "raise");
+    p.closeMenu();
   },
 };
-
-const allyExtendElement: MenuElement = {
-  id: "ally_extend",
-  name: "extend",
-  displayed: (params: MenuElementParams) =>
-    !!params.playerActions?.interaction?.allianceInfo?.inExtensionWindow,
-  disabled: (params: MenuElementParams) =>
-    !params.playerActions?.interaction?.allianceInfo?.canExtend,
-  color: COLORS.ally,
-  icon: allianceIcon,
-  action: (params: MenuElementParams) => {
-    if (!params.playerActions?.interaction?.allianceInfo?.canExtend) return;
-    params.playerActionHandler.handleExtendAlliance(params.selected!);
-    params.closeMenu();
-  },
-  timerFraction: (params: MenuElementParams): number => {
-    const interaction = params.playerActions?.interaction;
-    if (!interaction?.allianceInfo) return 1;
-    const remaining = Math.max(
-      0,
-      interaction.allianceInfo.expiresAt - params.game.ticks(),
-    );
-    const extensionWindow = Math.max(
-      1,
-      params.game.config().allianceExtensionPromptOffset(),
-    );
-    return Math.max(0, Math.min(1, remaining / extensionWindow));
-  },
-  renderType: "allyExtend",
-};
-
-const allyBreakElement: MenuElement = {
-  id: "ally_break",
-  name: "break",
-  disabled: (params: MenuElementParams) =>
-    !params.playerActions?.interaction?.canBreakAlliance,
-  displayed: (params: MenuElementParams) =>
-    !!params.playerActions?.interaction?.canBreakAlliance,
-  color: (params: MenuElementParams) =>
-    params.selected?.isTraitor() || params.selected?.isDisconnected()
-      ? COLORS.breakAllyNoDebuff
-      : COLORS.breakAlly,
-  icon: traitorIcon,
-  action: (params: MenuElementParams) => {
-    params.playerActionHandler.handleBreakAlliance(
-      params.myPlayer,
-      params.selected!,
-    );
-    params.closeMenu();
+const diplomacyLowerElement: MenuElement = {
+  displayed: (p) => p.selected !== null && p.selected.id() !== p.myPlayer.id(),
+  id: "diplomacy_lower",
+  name: "lower_relations",
+  color: COLORS.embargo,
+  icon: assetUrl("images/DiplomacyDown.svg"),
+  tooltipKeys: [{ key: "diplomacy.lower", className: "" }],
+  disabled: (p) => !p.playerActions.interaction?.canLowerDiplomacy,
+  action: (p) => {
+    p.playerActionHandler.handleDiplomacy(p.selected!, "lower");
+    p.closeMenu();
   },
 };
 
@@ -781,16 +741,12 @@ export const rootMenuElement: MenuElement = {
   icon: infoIcon,
   color: COLORS.info,
   subMenu: (params: MenuElementParams) => {
-    const isAllied = params.selected?.isAlliedWith(params.myPlayer);
     const isDisconnected = isDisconnectedTarget(params);
 
     const tileOwner = params.game.owner(params.tile);
     const isOwnTerritory =
       tileOwner.isPlayer() &&
       (tileOwner as PlayerView).id() === params.myPlayer.id();
-
-    const inExtensionWindow =
-      params.playerActions.interaction?.allianceInfo?.inExtensionWindow;
 
     // After game-over, nukes can target teammates in multiplayer (nukeSpawn allows it,
     // but not in singleplayer). Show the attack submenu so mobile users can access
@@ -806,10 +762,11 @@ export const rootMenuElement: MenuElement = {
     const menuItems: (MenuElement | null)[] = [
       infoMenuElement,
       ...(isOwnTerritory
-        ? [deleteUnitElement, allyRequestElement, buildMenuElement]
+        ? [deleteUnitElement, buildMenuElement]
         : [
-            isAllied && !isDisconnected ? allyBreakElement : boatMenuElement,
-            inExtensionWindow ? allyExtendElement : allyRequestElement,
+            boatMenuElement,
+            diplomacyLowerElement,
+            diplomacyRaiseElement,
             showDonateInsteadOfAttack
               ? donateGoldRadialElement
               : attackMenuElement,

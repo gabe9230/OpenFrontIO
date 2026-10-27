@@ -205,6 +205,8 @@ describe("PlayerPanel - action buttons follow PlayerActions capability flags", (
         canEmbargo: true,
         canBreakAlliance: true,
         canSendAllianceRequest: true,
+        canRaiseDiplomacy: true,
+        canLowerDiplomacy: true,
         canDonateGold: true,
         canDonateTroops: true,
       },
@@ -220,8 +222,8 @@ describe("PlayerPanel - action buttons follow PlayerActions capability flags", (
     // canEmbargo picks the stop-trade button (start-trade otherwise).
     expect(labels).toContain("player_panel.stop_trade");
     expect(labels).not.toContain("player_panel.start_trade");
-    expect(labels).toContain("player_panel.break_alliance");
-    expect(labels).toContain("player_panel.send_alliance");
+    expect(labels).toContain("diplomacy.lower");
+    expect(labels).toContain("diplomacy.raise");
   });
 
   test("no capability flags renders only chat and the start-trade toggle", () => {
@@ -234,8 +236,12 @@ describe("PlayerPanel - action buttons follow PlayerActions capability flags", (
     expect(labels).toContain("player_panel.start_trade");
     expect(labels).not.toContain("player_panel.emotes");
     expect(labels).not.toContain("player_panel.target");
-    expect(labels).not.toContain("player_panel.break_alliance");
-    expect(labels).not.toContain("player_panel.send_alliance");
+    for (const label of ["diplomacy.lower", "diplomacy.raise"]) {
+      const props = mockActionButton.mock.calls.find(
+        (c) => c[0].label === label,
+      )![0];
+      expect(props.disabled).toBe(true);
+    }
   });
 
   test("own panel uses canSendEmojiAllPlayers instead of the interaction flag", () => {

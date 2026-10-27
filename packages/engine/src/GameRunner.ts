@@ -335,6 +335,12 @@ export class GameRunner {
       const other = this.game.owner(tile) as Player;
       actions.interaction = {
         sharedBorder: player.sharesBorderWith(other),
+        diplomacyState: player.diplomacyState(other),
+        canRaiseDiplomacy: player.canSendAllianceRequest(other),
+        canLowerDiplomacy:
+          other !== player &&
+          !player.isOnSameTeam(other) &&
+          player.diplomacyState(other) > 0,
         canSendEmoji: player.canSendEmoji(other),
         canTarget: player.canTarget(other),
         canSendAllianceRequest: player.canSendAllianceRequest(other),

@@ -154,6 +154,7 @@ describe("Warship", () => {
   });
 
   test("Warship captures trade if player has port", async () => {
+    player1.declareWar(player2);
     const portTile = game.ref(coastX, 10);
     player1.buildUnit(UnitType.Port, portTile, {});
     game.addExecution(
@@ -325,6 +326,7 @@ describe("Warship", () => {
   });
 
   test("Warship prioritizes transport ships over warships", async () => {
+    player1.declareWar(player2);
     game.config().warshipShellAttackRate = () => Number.MAX_SAFE_INTEGER;
 
     const warship = player1.buildUnit(
@@ -672,6 +674,7 @@ describe("Warship", () => {
   });
 
   test("Low-health warship retreats AND fires at nearby enemy warship", async () => {
+    player1.declareWar(player2);
     game.config().warshipPortHealingBonusPerLevel = () => 0;
     game.config().warshipRetreatHealthPercent = () => 60;
     game.config().warshipTargettingRange = () => 5;
@@ -708,6 +711,7 @@ describe("Warship", () => {
   });
 
   test("Retreating warship aggroes nearby enemy transport before continuing retreat", async () => {
+    player1.declareWar(player2);
     game.config().warshipPortHealingBonusPerLevel = () => 0;
     game.config().warshipRetreatHealthPercent = () => 60;
     game.config().warshipTargettingRange = () => 5;
@@ -851,6 +855,7 @@ describe("Warship", () => {
   });
 
   test("Warship isInCombat becomes true when firing at an enemy", async () => {
+    player1.declareWar(player2);
     game.config().warshipPortHealingBonusPerLevel = () => 0;
     game.config().warshipShellAttackRate = () => 0;
     game.config().warshipTargettingRange = () => 5;
@@ -921,6 +926,7 @@ describe("Warship", () => {
   });
 
   test("Retreating warship continues moving to port after firing back", async () => {
+    player1.declareWar(player2);
     game.config().warshipPortHealingBonusPerLevel = () => 0;
     game.config().warshipRetreatHealthPercent = () => 60;
     game.config().warshipTargettingRange = () => 5;

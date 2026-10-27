@@ -6,6 +6,7 @@
  * what the FrameBuilder relies on when populating PlayerState.
  */
 
+import { DiplomacyState as D } from "@openfront/engine-api/game/Diplomacy";
 import {
   AllPlayers,
   EmojiMessage,
@@ -24,6 +25,29 @@ import {
 } from "../../util/viewStubs";
 
 describe("PlayerView accessors", () => {
+  it("applies diplomacy-only updates and detaches the incoming state map", () => {
+    const a = makePlayerView({ data: { smallID: 1 } });
+    const b = makePlayerView({ data: { smallID: 2 } });
+    expect(a.diplomacyState(b)).toBe(D.Neutral);
+    const diplomacy = { 2: D.War };
+    a.applyUpdate({ type: GameUpdateType.Player, id: a.id(), diplomacy });
+    expect(a.diplomacyState(b)).toBe(D.War);
+    diplomacy[2] = D.ColdWar;
+    expect(a.diplomacyState(b)).toBe(D.War);
+    a.applyUpdate({
+      type: GameUpdateType.Player,
+      id: a.id(),
+      diplomacy: { 2: D.ColdWar },
+    });
+    expect(a.diplomacyState(b)).toBe(D.ColdWar);
+    a.applyUpdate({
+      type: GameUpdateType.Player,
+      id: a.id(),
+      allies: [2],
+      diplomacy: { 2: D.Allied },
+    });
+    expect(a.diplomacyState(b)).toBe(D.Allied);
+  });
   it("forwards data fields", () => {
     const p = makePlayerView({
       data: {

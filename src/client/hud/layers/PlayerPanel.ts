@@ -33,8 +33,7 @@ import {
 import { lobbyLevelBadge } from "../../LobbyRosterLevels";
 import {
   PlayerReportedEvent,
-  SendAllianceRequestIntentEvent,
-  SendBreakAllianceIntentEvent,
+  SendDiplomacyIntentEvent,
   SendEmbargoAllIntentEvent,
   SendEmbargoIntentEvent,
   SendEmojiIntentEvent,
@@ -49,7 +48,6 @@ import { EmojiTable } from "./EmojiTable";
 import "./PlayerModerationModal";
 import "./PlayerReportModal";
 import "./SendResourceModal";
-const allianceIcon = assetUrl("images/AllianceIconWhite.svg");
 const chatIcon = assetUrl("images/ChatIconWhite.svg");
 const donateGoldIcon = assetUrl("images/DonateGoldIconWhite.svg");
 const donateTroopIcon = assetUrl("images/DonateTroopIconWhite.svg");
@@ -60,7 +58,6 @@ const stopTradingIcon = assetUrl("images/StopIconWhite.svg");
 const targetIcon = assetUrl("images/TargetIconWhite.svg");
 const startTradingIcon = assetUrl("images/TradingIconWhite.svg");
 const traitorIcon = assetUrl("images/TraitorIconLightRed.svg");
-const breakAllianceIcon = assetUrl("images/TraitorIconWhite.svg");
 
 // The viewer's own badge from their /users/@me progress. Shown even when they
 // hide their level from others, as their profile does.
@@ -186,7 +183,11 @@ export class PlayerPanel extends LitElement implements Controller {
         } catch (error) {
           console.warn("Failed to refresh player panel actions:", error);
         }
-        if (this.actions?.interaction?.allianceInfo?.expiresAt !== undefined) {
+        if (
+          this.actions?.interaction?.allianceInfo?.expiresAt !== undefined &&
+          this.actions.interaction.allianceInfo.expiresAt !==
+            Number.MAX_SAFE_INTEGER
+        ) {
           const expiresAt = this.actions.interaction.allianceInfo.expiresAt;
           const remainingTicks = expiresAt - this.g.ticks();
           const remainingSeconds = Math.max(0, Math.floor(remainingTicks / 10)); // 10 ticks per second
@@ -245,26 +246,6 @@ export class PlayerPanel extends LitElement implements Controller {
 
   private handleClose(e: Event) {
     e.stopPropagation();
-    this.hide();
-  }
-
-  private handleAllianceClick(
-    e: Event,
-    myPlayer: PlayerView,
-    other: PlayerView,
-  ) {
-    e.stopPropagation();
-    this.eventBus.emit(new SendAllianceRequestIntentEvent(myPlayer, other));
-    this.hide();
-  }
-
-  private handleBreakAllianceClick(
-    e: Event,
-    myPlayer: PlayerView,
-    other: PlayerView,
-  ) {
-    e.stopPropagation();
-    this.eventBus.emit(new SendBreakAllianceIntentEvent(myPlayer, other));
     this.hide();
   }
 
@@ -796,7 +777,8 @@ export class PlayerPanel extends LitElement implements Controller {
     }
     const remainingSecondsFor = (ally: PlayerView): number | null => {
       const expiresAt = expiryByAlly.get(ally.id());
-      if (expiresAt === undefined) return null;
+      if (expiresAt === undefined || expiresAt === Number.MAX_SAFE_INTEGER)
+        return null;
       const remainingTicks = expiresAt - this.g.ticks();
       return Math.max(0, Math.floor(remainingTicks / 10)); // 10 ticks per second
     };
@@ -896,13 +878,10 @@ export class PlayerPanel extends LitElement implements Controller {
     const myPlayer = this.g.myPlayer();
     const canDonateGold = this.actions?.interaction?.canDonateGold;
     const canDonateTroops = this.actions?.interaction?.canDonateTroops;
-    const canSendAllianceRequest =
-      this.actions?.interaction?.canSendAllianceRequest;
     const canSendEmoji =
       other === myPlayer
         ? this.actions?.canSendEmojiAllPlayers
         : this.actions?.interaction?.canSendEmoji;
-    const canBreakAlliance = this.actions?.interaction?.canBreakAlliance;
     const canTarget = this.actions?.interaction?.canTarget;
     const canEmbargo = this.actions?.interaction?.canEmbargo;
 
@@ -995,32 +974,29 @@ export class PlayerPanel extends LitElement implements Controller {
                           type: "green",
                         })
                   }
-                  ${
-                    canBreakAlliance
-                      ? actionButton({
-                          onClick: (e: MouseEvent) =>
-                            this.handleBreakAllianceClick(e, my, other),
-                          icon: breakAllianceIcon,
-                          iconAlt: "Break Alliance",
-                          title: translateText("player_panel.break_alliance"),
-                          label: translateText("player_panel.break_alliance"),
-                          type: "red",
-                        })
-                      : ""
-                  }
-                  ${
-                    canSendAllianceRequest
-                      ? actionButton({
-                          onClick: (e: MouseEvent) =>
-                            this.handleAllianceClick(e, my, other),
-                          icon: allianceIcon,
-                          iconAlt: "Alliance",
-                          title: translateText("player_panel.send_alliance"),
-                          label: translateText("player_panel.send_alliance"),
-                          type: "indigo",
-                        })
-                      : ""
-                  }
+                  ${(["raise", "lower"] as const).map((direction) =>
+                    actionButton({
+                      onClick: (e: MouseEvent) => {
+                        e.stopPropagation();
+                        this.eventBus.emit(
+                          new SendDiplomacyIntentEvent(other, direction),
+                        );
+                        this.hide();
+                      },
+                      icon: assetUrl(
+                        direction === "raise"
+                          ? "images/DiplomacyUp.svg"
+                          : "images/DiplomacyDown.svg",
+                      ),
+                      iconAlt: "",
+                      title: translateText("diplomacy." + direction),
+                      label: translateText("diplomacy." + direction),
+                      type: direction === "raise" ? "green" : "red",
+                      disabled: !(direction === "raise"
+                        ? this.actions?.interaction?.canRaiseDiplomacy
+                        : this.actions?.interaction?.canLowerDiplomacy),
+                    }),
+                  )}
                 </div>
               `
         }

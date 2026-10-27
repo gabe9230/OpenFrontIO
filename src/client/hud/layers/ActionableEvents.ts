@@ -1,3 +1,7 @@
+import {
+  diplomacyKey,
+  DiplomacyState,
+} from "@openfront/engine-api/game/Diplomacy";
 import { MessageType, Tick } from "@openfront/engine-api/game/GameTypes";
 import {
   AllianceExtensionUpdate,
@@ -223,8 +227,11 @@ export class ActionableEvents extends LitElement implements Controller {
       this.eventBus.emit(new PlaySoundEffectEvent("alliance-suggested"));
     }
     this.addEvent({
-      description: translateText("events_display.request_alliance", {
+      description: translateText("diplomacy.request", {
         name: requestor.displayName(),
+        state: translateText(
+          `diplomacy.${diplomacyKey(update.requestedState ?? DiplomacyState.Allied)}`,
+        ),
       }),
       buttons: [
         {
@@ -234,7 +241,7 @@ export class ActionableEvents extends LitElement implements Controller {
           preventClose: true,
         },
         {
-          text: translateText("events_display.accept_alliance"),
+          text: translateText("diplomacy.accept"),
           className: "btn",
           action: () => {
             this.eventBus.emit(new PlaySoundEffectEvent("alliance-accepted"));
@@ -244,7 +251,7 @@ export class ActionableEvents extends LitElement implements Controller {
           },
         },
         {
-          text: translateText("events_display.reject_alliance"),
+          text: translateText("diplomacy.reject"),
           className: "btn-info",
           action: () => {
             this.eventBus.emit(new PlaySoundEffectEvent("alliance-declined"));

@@ -1,3 +1,4 @@
+import { DiplomacyState } from "@openfront/engine-api/game/Diplomacy";
 import { TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   BuildableUnit,
@@ -495,6 +496,12 @@ export class PlayerView implements PlayerLike {
 
   isAlliedWith(other: PlayerView): boolean {
     return this.state.allies.some((n) => other.smallID() === n);
+  }
+
+  diplomacyState(other: PlayerView): DiplomacyState {
+    if (other === this || this.isOnSameTeam(other) || this.isAlliedWith(other))
+      return DiplomacyState.Allied;
+    return this.state.diplomacy?.[other.smallID()] ?? DiplomacyState.Neutral;
   }
 
   isOnSameTeam(other: PlayerView): boolean {

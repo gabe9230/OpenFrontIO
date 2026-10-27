@@ -22,6 +22,7 @@ export type GameID = string;
 export type ClientID = string;
 
 export type Intent =
+  | DiplomacyIntent
   | SpawnIntent
   | AttackIntent
   | CancelAttackIntent
@@ -49,6 +50,7 @@ export type Intent =
   | ToggleGameStartTimer;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
+export type DiplomacyIntent = z.infer<typeof DiplomacyIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
 export type SpawnIntent = z.infer<typeof SpawnIntentSchema>;
 export type BoatAttackIntent = z.infer<typeof BoatAttackIntentSchema>;
@@ -438,6 +440,12 @@ export const AllianceRequestIntentSchema = z.object({
   recipient: MappedID,
 });
 
+export const DiplomacyIntentSchema = z.object({
+  type: z.literal("diplomacy"),
+  recipient: MappedID,
+  direction: z.enum(["raise", "lower"]),
+});
+
 export const AllianceRejectIntentSchema = z.object({
   type: z.literal("allianceReject"),
   requestor: MappedID,
@@ -587,6 +595,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   TogglePauseIntentSchema,
   UpdateGameConfigIntentSchema,
   ToggleGameStartTimerIntentSchema,
+  DiplomacyIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

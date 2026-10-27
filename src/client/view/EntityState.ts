@@ -178,6 +178,7 @@ export function playerStateFromUpdate(pu: PlayerUpdate): PlayerState {
     spawnTile: pu.spawnTile,
     lastDeleteUnitTick: pu.lastDeleteUnitTick!,
     allies: pu.allies!.slice(),
+    diplomacy: { ...pu.diplomacy },
     embargoes: [],
     targets: pu.targets!.slice(),
     outgoingAttacks: pu.outgoingAttacks!,

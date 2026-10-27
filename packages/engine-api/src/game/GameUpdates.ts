@@ -261,6 +261,7 @@ export interface PlayerUpdate {
   /** Cumulative gold received from all sources (workers, trade, ...). */
   goldEarned?: Gold;
   troops?: number;
+  diplomacy?: Record<number, number>;
   allies?: number[];
   embargoes?: Set<PlayerID>;
   isTraitor?: boolean;
@@ -294,6 +295,7 @@ export interface AllianceRequestUpdate {
   requestorID: number;
   recipientID: number;
   createdAt: Tick;
+  requestedState?: number;
 }
 
 export interface AllianceRequestReplyUpdate {

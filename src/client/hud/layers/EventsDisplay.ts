@@ -1,3 +1,7 @@
+import {
+  diplomacyKey,
+  DiplomacyState,
+} from "@openfront/engine-api/game/Diplomacy";
 import { AllPlayers, MessageType } from "@openfront/engine-api/game/GameTypes";
 import {
   AllianceExpiredUpdate,
@@ -17,7 +21,10 @@ import { customElement, query, state } from "lit/decorators.js";
 import { DirectiveResult } from "lit/directive.js";
 import { unsafeHTML, UnsafeHTMLDirective } from "lit/directives/unsafe-html.js";
 import { Controller } from "../../Controller";
-import { SendAllianceRequestIntentEvent } from "../../Transport";
+import {
+  SendAllianceRequestIntentEvent,
+  SendDiplomacyIntentEvent,
+} from "../../Transport";
 import { UserSettings } from "../../UserSettings";
 
 import { GoToPlayerEvent, GoToUnitEvent } from "../../TransformHandler";
@@ -147,6 +154,27 @@ export class EventsDisplay extends LitElement implements Controller {
       SendAllianceRequestIntentEvent,
       this.onAllianceRequestSentConfirmation.bind(this),
     );
+    this.eventBus.on(SendDiplomacyIntentEvent, (e) => {
+      const my = this.game.myPlayer();
+      if (
+        e.direction !== "raise" ||
+        !my ||
+        e.recipient.isRequestingAllianceWith(my)
+      )
+        return;
+      const next = Math.min(
+        DiplomacyState.Allied,
+        my.diplomacyState(e.recipient) + 1,
+      );
+      this.addEvent({
+        description: translateText("diplomacy.request_sent", {
+          name: e.recipient.displayName(),
+          state: translateText(`diplomacy.${diplomacyKey(next)}`),
+        }),
+        type: MessageType.ALLIANCE_REQUEST,
+        createdAt: this.game.ticks(),
+      });
+    });
   }
 
   private onAllianceRequestSentConfirmation(e: SendAllianceRequestIntentEvent) {
@@ -375,8 +403,11 @@ export class EventsDisplay extends LitElement implements Controller {
       update.request.recipientID,
     ) as PlayerView;
     this.addEvent({
-      description: translateText("events_display.alliance_request_status", {
+      description: translateText("diplomacy.request_result", {
         name: recipient.displayName(),
+        state: translateText(
+          `diplomacy.${diplomacyKey(update.request.requestedState ?? DiplomacyState.Allied)}`,
+        ),
         status: update.accepted
           ? translateText("events_display.alliance_accepted")
           : translateText("events_display.alliance_rejected"),

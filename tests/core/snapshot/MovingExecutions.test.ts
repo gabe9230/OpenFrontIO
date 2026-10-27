@@ -204,6 +204,7 @@ describe("snapshot: warships and trade ships", () => {
 
   test("warship hunting a trade ship", async () => {
     const { game, p1, p2 } = await navalGame();
+    p1.declareWar(p2);
     const portTile = game.ref(coastX, 10);
     p1.buildUnit(UnitType.Port, portTile, {});
     game.addExecution(

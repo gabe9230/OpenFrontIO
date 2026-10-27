@@ -435,6 +435,9 @@ export interface AllianceInfo {
 }
 
 export interface PlayerInteraction {
+  diplomacyState?: number;
+  canRaiseDiplomacy?: boolean;
+  canLowerDiplomacy?: boolean;
   sharedBorder: boolean;
   canSendEmoji: boolean;
   canSendAllianceRequest: boolean;

@@ -1,3 +1,4 @@
+import { DiplomacyState } from "@openfront/engine-api/game/Diplomacy";
 import {
   PlayerInfo,
   PlayerType,
@@ -41,7 +42,7 @@ describe("Alliance acceptance immediately destroys in-flight nukes", () => {
     player1.buildUnit(UnitType.MissileSilo, game.ref(0, 0), {});
   });
 
-  test("accepting alliance destroys in-flight nukes between the newly allied players", () => {
+  test("accepting a peace proposal destroys in-flight nukes between the newly allied players", () => {
     game.addExecution(
       new NukeExecution(
         UnitType.AtomBomb,
@@ -66,8 +67,8 @@ describe("Alliance acceptance immediately destroys in-flight nukes", () => {
     game.addExecution(new AllianceRequestExecution(player2, player1.id()));
     game.executeNextTick(); // counter-request auto-accepts
 
-    expect(player2.isAlliedWith(player1)).toBe(true);
-    expect(player1.isFriendly(player2)).toBe(true);
+    expect(player2.diplomacyState(player1)).toBe(DiplomacyState.ColdWar);
+    expect(player1.isFriendly(player2)).toBe(false);
 
     expect(game.units(UnitType.AtomBomb)).toHaveLength(0);
   });
@@ -96,8 +97,8 @@ describe("Alliance acceptance immediately destroys in-flight nukes", () => {
     game.addExecution(new AllianceRequestExecution(player2, player1.id()));
     game.executeNextTick(); // both init: first creates request, second auto-accepts
 
-    expect(player2.isAlliedWith(player1)).toBe(true);
-    expect(player1.isFriendly(player2)).toBe(true);
+    expect(player2.diplomacyState(player1)).toBe(DiplomacyState.ColdWar);
+    expect(player1.isFriendly(player2)).toBe(false);
 
     expect(game.units(UnitType.AtomBomb)).toHaveLength(1);
 
@@ -106,7 +107,7 @@ describe("Alliance acceptance immediately destroys in-flight nukes", () => {
     expect(remainingNuke.targetTile()).toBe(game.ref(10, 10));
   });
 
-  test("accepting alliance displays a nuke-cancellation display message", () => {
+  test("accepting a peace proposal displays a nuke-cancellation display message", () => {
     game.addExecution(
       new NukeExecution(
         UnitType.AtomBomb,
@@ -131,8 +132,8 @@ describe("Alliance acceptance immediately destroys in-flight nukes", () => {
     game.addExecution(new AllianceRequestExecution(player2, player1.id()));
     const updates = game.executeNextTick(); // counter-request auto-accepts
 
-    expect(player2.isAlliedWith(player1)).toBe(true);
-    expect(player1.isFriendly(player2)).toBe(true);
+    expect(player2.diplomacyState(player1)).toBe(DiplomacyState.ColdWar);
+    expect(player1.isFriendly(player2)).toBe(false);
 
     expect(game.units(UnitType.AtomBomb)).toHaveLength(0);
 
@@ -164,8 +165,8 @@ describe("Alliance acceptance immediately destroys in-flight nukes", () => {
     game.addExecution(new AllianceRequestExecution(player2, player1.id()));
     game.executeNextTick(); // counter-request auto-accepts
 
-    expect(player2.isAlliedWith(player1)).toBe(true);
-    expect(player1.isFriendly(player2)).toBe(true);
+    expect(player2.diplomacyState(player1)).toBe(DiplomacyState.ColdWar);
+    expect(player1.isFriendly(player2)).toBe(false);
 
     // Without the fix this MIRV keeps flying, separates into ~350
     // MIRVWarheads, and devastates the player you just allied with.
@@ -273,7 +274,7 @@ describe("Alliance acceptance immediately destroys in-flight nukes", () => {
     expect(cancelMsg.params.count).toBe(1);
   });
 
-  test("accepting alliance destroys in-flight MIRV even if the targeted tile changed hands before acceptance", () => {
+  test("accepting a peace proposal destroys in-flight MIRV even if the targeted tile changed hands before acceptance", () => {
     player2.conquer(game.ref(5, 6));
     game.addExecution(new MirvExecution(player1, game.ref(5, 5)));
 
@@ -293,7 +294,7 @@ describe("Alliance acceptance immediately destroys in-flight nukes", () => {
     game.addExecution(new AllianceRequestExecution(player2, player1.id()));
     game.executeNextTick();
 
-    expect(player2.isAlliedWith(player1)).toBe(true);
+    expect(player2.diplomacyState(player1)).toBe(DiplomacyState.ColdWar);
 
     // Because targetPlayer was captured at launch as player2, the MIRV must still be cancelled
     expect(game.units(UnitType.MIRV)).toHaveLength(0);
@@ -305,10 +306,8 @@ describe("Alliance acceptance immediately destroys in-flight nukes", () => {
     expect(game.units(UnitType.MIRVWarhead)).toHaveLength(0);
   });
 
-  test("accepting alliance after child warheads are queued cancels queued executions and prevents warheads", () => {
-    // Pre-stage an incoming alliance request from player2 to player1
-    game.addExecution(new AllianceRequestExecution(player2, player1.id()));
-    game.executeNextTick();
+  test("accepting a peace proposal after child warheads are queued cancels queued executions and prevents warheads", () => {
+    // A launch invalidates earlier peace proposals; request peace after launch.
 
     // Launch MIRV from player1 targeted at player2
     game.addExecution(new MirvExecution(player1, game.ref(5, 5)));
@@ -323,11 +322,12 @@ describe("Alliance acceptance immediately destroys in-flight nukes", () => {
     expect(game.units(UnitType.MIRV)).toHaveLength(1);
     expect(game.units(UnitType.MIRVWarhead)).toHaveLength(0);
 
-    // Accept alliance in a single tick (matching pending incoming request)
+    // Matching peace proposals resolve in one tick and cancel the queued salvo.
+    game.addExecution(new AllianceRequestExecution(player2, player1.id()));
     game.addExecution(new AllianceRequestExecution(player1, player2.id()));
     game.executeNextTick();
 
-    expect(player2.isAlliedWith(player1)).toBe(true);
+    expect(player2.diplomacyState(player1)).toBe(DiplomacyState.ColdWar);
     expect(game.units(UnitType.MIRV)).toHaveLength(0);
 
     // Tick through the rest of the game: verify no child execution ever spawns a warhead on any tick

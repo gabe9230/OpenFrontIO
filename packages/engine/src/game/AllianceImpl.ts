@@ -24,8 +24,11 @@ export class AllianceImpl implements MutableAlliance {
     public recipient_: Player,
     private createdAt_: Tick,
     private id_: number,
+    permanent = false,
   ) {
-    this.expiresAt_ = createdAt_ + mg.config().allianceDuration();
+    this.expiresAt_ = permanent
+      ? Number.MAX_SAFE_INTEGER
+      : createdAt_ + mg.config().allianceDuration();
   }
 
   other(player: Player): Player {

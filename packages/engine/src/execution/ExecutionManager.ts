@@ -11,6 +11,7 @@ import { AllianceExtensionExecution } from "./alliance/AllianceExtensionExecutio
 import { AllianceRejectExecution } from "./alliance/AllianceRejectExecution";
 import { AllianceRequestExecution } from "./alliance/AllianceRequestExecution";
 import { BreakAllianceExecution } from "./alliance/BreakAllianceExecution";
+import { DiplomacyExecution } from "./alliance/DiplomacyExecution";
 import { AttackExecution } from "./AttackExecution";
 import { BoatRetreatExecution } from "./BoatRetreatExecution";
 import { ConstructionExecution } from "./ConstructionExecution";
@@ -92,7 +93,13 @@ export class Executor {
       case "boat":
         return new TransportShipExecution(player, intent.dst, intent.troops);
       case "allianceRequest":
-        return new AllianceRequestExecution(player, intent.recipient);
+        return new AllianceRequestExecution(player, intent.recipient, true);
+      case "diplomacy":
+        return new DiplomacyExecution(
+          player,
+          intent.recipient,
+          intent.direction,
+        );
       case "allianceReject":
         return new AllianceRejectExecution(intent.requestor, player);
       case "breakAlliance":

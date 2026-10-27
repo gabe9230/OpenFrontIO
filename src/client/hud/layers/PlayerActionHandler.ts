@@ -3,6 +3,7 @@ import { EventBus } from "@openfront/shared/EventBus";
 import {
   SendAllianceExtensionIntentEvent,
   SendAllianceRequestIntentEvent,
+  SendDiplomacyIntentEvent,
   SendAttackIntentEvent,
   SendBoatAttackIntentEvent,
   SendBreakAllianceIntentEvent,
@@ -54,6 +55,10 @@ export class PlayerActionHandler {
 
   handleAllianceRequest(player: PlayerView, recipient: PlayerView) {
     this.eventBus.emit(new SendAllianceRequestIntentEvent(player, recipient));
+  }
+
+  handleDiplomacy(recipient: PlayerView, direction: "raise" | "lower") {
+    this.eventBus.emit(new SendDiplomacyIntentEvent(recipient, direction));
   }
 
   handleExtendAlliance(recipient: PlayerView) {

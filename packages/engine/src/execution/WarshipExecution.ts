@@ -1,3 +1,4 @@
+import { DiplomacyState } from "@openfront/engine-api/game/Diplomacy";
 import { TileRef } from "@openfront/engine-api/game/GameMap";
 import { UnitType } from "@openfront/engine-api/game/GameTypes";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
@@ -302,8 +303,19 @@ export class WarshipExecution implements Execution {
       }
 
       const type = unit.type();
+      if (
+        type !== UnitType.TradeShip &&
+        owner.diplomacyState(unit.owner()) !== DiplomacyState.War
+      )
+        continue;
 
       if (includeTradeShips && type === UnitType.TradeShip) {
+        const destinationOwner = unit.targetUnit()?.owner();
+        if (
+          !owner.canPirate(unit.owner()) ||
+          (destinationOwner && !owner.canPirate(destinationOwner))
+        )
+          continue;
         if (warshipComponent === undefined) {
           warshipComponent = mg.getWaterComponent(this.warship.tile());
           hasReachablePort =

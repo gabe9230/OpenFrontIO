@@ -1,3 +1,4 @@
+import { SendDiplomacyIntentEvent } from "../../../../src/client/Transport";
 /**
  * Hovering an owned tile must show the owner's info card, and the name color
  * must reflect the local player's relation to them (friendly = green).
@@ -114,10 +115,29 @@ describe("PlayerInfoOverlay", () => {
     overlay.init();
   });
 
+  it.each([
+    [0, "war"],
+    [1, "cold_war"],
+    [2, "neutral"],
+    [3, "allied"],
+  ])("shows diplomacy tier %s for a hovered human", (state, key) => {
+    overlay.game = makeGame({
+      isFriendly: () => false,
+      isAlliedWith: () => false,
+      smallID: () => 1,
+      diplomacyState: () => state,
+    }) as never;
+    overlay.maybeShow(10, 10);
+    const out = flatten(overlay.render());
+    expect(out).toContain(`diplomacy.${key}`);
+    expect(out).not.toContain("relation-smiley");
+  });
+
   it("shows the hovered player's card with a green name for a friend", () => {
     overlay.game = makeGame({
       isFriendly: () => true,
       isAlliedWith: () => false,
+      diplomacyState: () => 2,
       smallID: () => 1,
     }) as never;
 
@@ -144,6 +164,7 @@ describe("PlayerInfoOverlay", () => {
     const game = makeGame({
       isFriendly: () => false,
       isAlliedWith: () => false,
+      diplomacyState: () => 2,
       smallID: () => 1,
     });
     overlay.game = game as never;
@@ -182,6 +203,7 @@ describe("PlayerInfoOverlay", () => {
         me ?? {
           isFriendly: () => false,
           isAlliedWith: () => false,
+          diplomacyState: () => 2,
           smallID: () => 1,
           actions: async () => ({ buildableUnits: [] }),
         },
@@ -213,6 +235,7 @@ describe("PlayerInfoOverlay", () => {
         ...hovered,
         isFriendly: () => true,
         isAlliedWith: () => false,
+        diplomacyState: () => 2,
       });
       expect(out).not.toContain("player_panel.chat");
       expect(out).toContain("player_panel.emotes");
@@ -236,6 +259,7 @@ describe("PlayerInfoOverlay", () => {
         {
           isFriendly: () => false,
           isAlliedWith: () => false,
+          diplomacyState: () => 2,
           smallID: () => 1,
         },
         true,
@@ -300,6 +324,7 @@ describe("PlayerInfoOverlay", () => {
       overlay.game = makeGame({
         isFriendly: () => false,
         isAlliedWith: () => false,
+        diplomacyState: () => 2,
         smallID: () => 1,
         actions,
       }) as never;
@@ -336,16 +361,16 @@ describe("PlayerInfoOverlay", () => {
         true,
       );
       expect(actions).toHaveBeenCalledWith(42, [UnitType.TransportShip]);
-      expect(out).toContain("player_panel.send_alliance");
+      expect(out).toContain("diplomacy.raise");
       expect(out).toContain("player_panel.target");
       expect(out).toContain("user_setting.boat_attack");
-      expect(out).not.toContain("player_panel.break_alliance");
+      expect(out).not.toContain("diplomacy.lower");
     });
 
     it("swap request alliance for break alliance once allied, and hide boat out of reach", async () => {
       const { out } = await hoverBob({ canBreakAlliance: true }, false);
-      expect(out).toContain("player_panel.break_alliance");
-      expect(out).not.toContain("player_panel.send_alliance");
+      expect(out).toContain("diplomacy.lower");
+      expect(out).not.toContain("diplomacy.raise");
       expect(out).not.toContain("player_panel.target");
       expect(out).not.toContain("user_setting.boat_attack");
     });
@@ -353,18 +378,19 @@ describe("PlayerInfoOverlay", () => {
     it("act on the tile the panel shows", async () => {
       await hoverBob({ canSendAllianceRequest: true, canTarget: true }, true);
       const tree = overlay.render();
-      clickHandler(tree, "player_panel.send_alliance")!();
+      clickHandler(tree, "diplomacy.raise")!();
       clickHandler(tree, "player_panel.target")!();
       clickHandler(tree, "user_setting.boat_attack")!();
 
       const sent = emit.mock.calls.map(([e]) => e);
-      expect(sent[0]).toBeInstanceOf(DoRequestAllianceEvent);
+      expect(sent[0]).toBeInstanceOf(SendDiplomacyIntentEvent);
+      expect(sent[0].direction).toBe("raise");
       expect(sent[1]).toBeInstanceOf(DoTargetPlayerEvent);
       expect(sent[2]).toBeInstanceOf(DoBoatAttackEvent);
-      expect(sent.map((e) => e.tile)).toEqual([42, 42, 42]);
+      expect(sent.slice(1).map((e) => e.tile)).toEqual([42, 42]);
       // Alliance and target also name the shown player, so a tile that
       // changes hands meanwhile doesn't redirect them.
-      expect(sent[0].playerID).toBe("bob");
+      expect(sent[0].recipient.id()).toBe("bob");
       expect(sent[1].playerID).toBe("bob");
     });
 
@@ -373,11 +399,11 @@ describe("PlayerInfoOverlay", () => {
         { canSendAllianceRequest: true, canTarget: true },
         false,
       );
-      clickHandler(overlay.render(), "player_panel.send_alliance")!();
+      clickHandler(overlay.render(), "diplomacy.raise")!();
       overlay.maybeShow(10, 10); // the mouse moves on
 
       const out = flatten(overlay.render());
-      expect(out).not.toContain("player_panel.send_alliance");
+      expect(out).not.toContain("diplomacy.raise");
       expect(out).toContain("player_panel.target");
       // No new question yet: the game hasn't seen the request.
       expect(actions).toHaveBeenCalledTimes(1);
@@ -386,9 +412,7 @@ describe("PlayerInfoOverlay", () => {
     it("drop Send Alliance when I press K over the player", async () => {
       await hoverBob({ canSendAllianceRequest: true }, false);
       bus.emit(new DoRequestAllianceEvent());
-      expect(flatten(overlay.render())).not.toContain(
-        "player_panel.send_alliance",
-      );
+      expect(flatten(overlay.render())).not.toContain("diplomacy.raise");
     });
 
     it("ignore an answer that was on its way before I acted", async () => {
@@ -411,9 +435,7 @@ describe("PlayerInfoOverlay", () => {
       await Promise.resolve();
       await Promise.resolve();
 
-      expect(flatten(overlay.render())).not.toContain(
-        "player_panel.send_alliance",
-      );
+      expect(flatten(overlay.render())).not.toContain("diplomacy.raise");
     });
 
     it("show none while players are still spawning", async () => {
@@ -421,6 +443,7 @@ describe("PlayerInfoOverlay", () => {
       const game = makeGame({
         isFriendly: () => false,
         isAlliedWith: () => false,
+        diplomacyState: () => 2,
         smallID: () => 1,
         actions,
       });
@@ -449,6 +472,7 @@ describe("PlayerInfoOverlay", () => {
         ...hovered,
         isFriendly: () => true,
         isAlliedWith: () => false,
+        diplomacyState: () => 2,
         actions: vi.fn(),
       };
       const game = makeGame(me);
