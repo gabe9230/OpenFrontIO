@@ -9,10 +9,13 @@ import { Railroad } from "@openfront/engine/game/Railroad";
 import { TrainStation } from "@openfront/engine/game/TrainStation";
 import { describe, expect, it, vi } from "vitest";
 import { setup } from "../../util/Setup";
+import { expectSnapshotRoundTrip } from "../../util/Snapshot";
 
 async function currentSegmentFixture(
   splitIndex: number,
   reverseDirection = false,
+  insertedType = UnitType.City,
+  initialize = true,
 ) {
   const game = await setup("plains", { instantBuild: true }, [
     new PlayerInfo("p1", PlayerType.Human, null, "p1"),
@@ -31,7 +34,7 @@ async function currentSegmentFixture(
   );
   const insertedStation = new TrainStation(
     game,
-    player.buildUnit(UnitType.City, railTiles[splitIndex], {}),
+    player.buildUnit(insertedType, railTiles[splitIndex], {}),
   );
 
   const net = game.railNetwork();
@@ -46,7 +49,7 @@ async function currentSegmentFixture(
   const source = reverseDirection ? stationB : stationA;
   const destination = reverseDirection ? stationA : stationB;
   const exec = new TrainExecution(net, player, source, destination, 1);
-  exec.init(game, 0);
+  if (initialize) exec.init(game, 0);
   expect(exec.isActive()).toBe(true);
 
   const splitRail = () => {
@@ -73,6 +76,7 @@ async function currentSegmentFixture(
   };
 
   return {
+    game,
     exec,
     insertedStation,
     player,
@@ -84,7 +88,24 @@ async function currentSegmentFixture(
 }
 
 describe("TrainExecution", () => {
-  it("despawns at the final destination and pays exactly once, with no intermediate payouts", async () => {
+  it("does not repay an earlier stop after saving and restoring mid-trip", async () => {
+    const { game, exec, player, splitRail } = await currentSegmentFixture(
+      4,
+      false,
+      UnitType.City,
+      false,
+    );
+    splitRail();
+    game.addExecution(exec);
+    for (let i = 0; i < 10 && exec.tradeStopsVisited() === 0; i++)
+      game.executeNextTick();
+    expect(exec.tradeStopsVisited()).toBe(1);
+    expect(player.trainGold()).toBe(55_000n);
+    const restored = await expectSnapshotRoundTrip(game, "plains", 10);
+    expect(player.trainGold()).toBe(110_000n);
+    expect(restored.player(player.id()).trainGold()).toBe(110_000n);
+  });
+  it("pays once at each visited city and despawns at the final destination", async () => {
     const { exec, player, source, destination, insertedStation, splitRail } =
       await currentSegmentFixture(4);
     const sourceStop = vi.spyOn(source, "onTrainStop");
@@ -100,9 +121,10 @@ describe("TrainExecution", () => {
     for (let tick = 1; tick <= 10; tick++) exec.tick(tick);
     expect(exec.isActive()).toBe(false);
     expect(sourceStop).not.toHaveBeenCalled();
-    expect(intermediateStop).not.toHaveBeenCalled();
+    expect(intermediateStop).toHaveBeenCalledTimes(1);
     expect(finalStop).toHaveBeenCalledTimes(1);
-    expect(player.trainGold()).toBe(55_000n);
+    expect(player.trainGold()).toBe(110_000n);
+    expect(exec.tradeStopsVisited()).toBe(2);
   });
 
   it("uses the destination level when the train arrives", async () => {
@@ -111,6 +133,52 @@ describe("TrainExecution", () => {
     for (let level = 1; level < 10; level++) destination.unit.increaseLevel();
     for (let tick = 2; tick <= 10; tick++) exec.tick(tick);
     expect(player.trainGold()).toBe(100_000n);
+  });
+
+  it("uses each visited building's own level for its payout", async () => {
+    const { exec, player, insertedStation, destination, splitRail } =
+      await currentSegmentFixture(4);
+    for (let level = 1; level < 5; level++)
+      insertedStation.unit.increaseLevel();
+    for (let level = 1; level < 10; level++) destination.unit.increaseLevel();
+    splitRail();
+    exec.tick(1);
+    exec.tick(2);
+    expect(player.trainGold()).toBe(75_000n);
+    expect(exec.isActive()).toBe(true);
+    for (let tick = 3; tick <= 10; tick++) exec.tick(tick);
+    expect(player.trainGold()).toBe(175_000n);
+    expect(exec.tradeStopsVisited()).toBe(2);
+  });
+
+  it("retains earlier stop revenue when the final destination is destroyed", async () => {
+    const { exec, player, destination, splitRail } =
+      await currentSegmentFixture(4);
+    splitRail();
+    exec.tick(1);
+    exec.tick(2);
+    expect(player.trainGold()).toBe(55_000n);
+    destination.unit.delete(false);
+    exec.tick(3);
+    expect(exec.isActive()).toBe(false);
+    expect(player.trainGold()).toBe(55_000n);
+    expect(exec.tradeStopsVisited()).toBe(1);
+  });
+
+  it("passes through factories without earning a payout or counting a trade stop", async () => {
+    const { exec, player, splitRail } = await currentSegmentFixture(
+      4,
+      false,
+      UnitType.Factory,
+    );
+    splitRail();
+    exec.tick(1);
+    exec.tick(2);
+    expect(player.trainGold()).toBe(0n);
+    expect(exec.tradeStopsVisited()).toBe(0);
+    for (let tick = 3; tick <= 10; tick++) exec.tick(tick);
+    expect(player.trainGold()).toBe(55_000n);
+    expect(exec.tradeStopsVisited()).toBe(1);
   });
 
   it("despawns without paying if the destination is destroyed", async () => {
@@ -135,7 +203,7 @@ describe("TrainExecution", () => {
     expect(player.trainGold()).toBe(0n);
   });
 
-  it("passes a station inserted ahead without stopping or paying", async () => {
+  it("pays at a station inserted ahead of the engine", async () => {
     const { exec, insertedStation, player, splitRail } =
       await currentSegmentFixture(4);
     const onTrainStop = vi.spyOn(insertedStation, "onTrainStop");
@@ -145,8 +213,8 @@ describe("TrainExecution", () => {
     exec.tick(2);
 
     expect(exec.isActive()).toBe(true);
-    expect(onTrainStop).not.toHaveBeenCalled();
-    expect(player.trainGold()).toBe(0n);
+    expect(onTrainStop).toHaveBeenCalledTimes(1);
+    expect(player.trainGold()).toBe(55_000n);
   });
 
   it("does not visit or pay a station inserted behind the engine", async () => {
@@ -164,7 +232,7 @@ describe("TrainExecution", () => {
     expect(player.trainGold()).toBe(0n);
   });
 
-  it("passes a station inserted at the engine without stopping or paying", async () => {
+  it("pays exactly once at a station inserted at the engine", async () => {
     const { exec, insertedStation, player, splitRail } =
       await currentSegmentFixture(2);
     const onTrainStop = vi.spyOn(insertedStation, "onTrainStop");
@@ -174,8 +242,8 @@ describe("TrainExecution", () => {
     exec.tick(2);
     exec.tick(3);
 
-    expect(onTrainStop).not.toHaveBeenCalled();
-    expect(player.trainGold()).toBe(0n);
+    expect(onTrainStop).toHaveBeenCalledTimes(1);
+    expect(player.trainGold()).toBe(55_000n);
   });
 
   it("does not revisit a passed station while travelling in reverse", async () => {

@@ -31,7 +31,7 @@ export class TrainExecution implements Execution {
   private stations: TrainStation[] = [];
   private currentRailroad: OrientedRailroad | null = null;
   private speed: number = 2;
-  // Snapshot-compatible delivery counter. Intermediate rail nodes never pay.
+  // Counts city/port visits; payout depends on each building, not this count.
   private _tradeStopsVisited: number = 0;
   private pathTiles: TileRef[] = [];
   private pathIndex: number = 0;
@@ -141,8 +141,7 @@ export class TrainExecution implements Execution {
       if (arrived) this.targetReached();
       this.deleteTrain();
       if (arrived) {
-        this.destination.onTrainStop(this);
-        this._tradeStopsVisited++;
+        this.stationReached(this.destination);
       }
     }
   }
@@ -332,7 +331,7 @@ export class TrainExecution implements Execution {
 
     // Drop replacement stations whose stop boundary is already behind the
     // engine. A station exactly at the engine remains as a route boundary;
-    // only the trip's final destination is eligible for a payout.
+    // it is still eligible for its one visit payout.
     let activeSegment = 0;
     let segmentStart = 0;
     let boundary = 0;
@@ -397,7 +396,7 @@ export class TrainExecution implements Execution {
         this.currentTile - this.currentRailroad.getTiles().length;
       if (this.stations[1] === this.destination)
         return { tile: null, arrived: true };
-      // Other stations are rail junctions, not economic stops.
+      this.stationReached(this.stations[1]);
       if (!this.nextStation()) {
         return { tile: null, arrived: false };
       }
@@ -414,6 +413,13 @@ export class TrainExecution implements Execution {
 
   isActive(): boolean {
     return this.active;
+  }
+
+  private stationReached(station: TrainStation): void {
+    station.onTrainStop(this);
+    const type = station.unit.type();
+    if (type === UnitType.City || type === UnitType.Port)
+      this._tradeStopsVisited++;
   }
 
   activeDuringSpawnPhase(): boolean {
