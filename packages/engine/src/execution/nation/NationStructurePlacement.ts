@@ -301,19 +301,19 @@ export class NationStructurePlacement {
     // Build unit → cluster lookup in one O(total_stations) pass.
     const stationManager = game.railNetwork().stationManager();
     const unitToCluster = new Map<Unit, Cluster | null>();
+    let maxStationLevel = 1;
     for (const station of stationManager.getAll()) {
       unitToCluster.set(station.unit, station.getCluster());
+      maxStationLevel = Math.max(maxStationLevel, station.unit.level());
     }
 
     const maxTradeGold = Math.max(
-      Number(game.config().trainGold("ally", 0, player)),
+      Number(game.config().trainGold("ally", maxStationLevel, player)),
       1,
     );
     const result: ReachableStation[] = [];
 
     // Own structures — weighted by "self" trade gold.
-    const selfWeight =
-      Number(game.config().trainGold("self", 0, player)) / maxTradeGold;
     for (const unit of player.units(
       UnitType.City,
       UnitType.Port,
@@ -323,7 +323,9 @@ export class NationStructurePlacement {
         result.push({
           tile: unit.tile(),
           cluster: unitToCluster.get(unit)!,
-          weight: selfWeight,
+          weight:
+            Number(game.config().trainGold("self", unit.level(), player)) /
+            maxTradeGold,
         });
       }
     }
@@ -338,8 +340,6 @@ export class NationStructurePlacement {
         : player.isAlliedWith(neighbor)
           ? "ally"
           : "other";
-      const weight =
-        Number(game.config().trainGold(relType, 0, player)) / maxTradeGold;
       for (const unit of neighbor.units(
         UnitType.City,
         UnitType.Port,
@@ -349,7 +349,9 @@ export class NationStructurePlacement {
           result.push({
             tile: unit.tile(),
             cluster: unitToCluster.get(unit)!,
-            weight,
+            weight:
+              Number(game.config().trainGold(relType, unit.level(), player)) /
+              maxTradeGold,
           });
         }
       }

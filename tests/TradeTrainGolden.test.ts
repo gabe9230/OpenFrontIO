@@ -101,15 +101,15 @@ describe("trade ship golden values", () => {
 });
 
 describe("train golden values", () => {
-  test("trainGold: relationship × trade stops grid", () => {
+  test("trainGold: relationship × destination level grid", () => {
     const rels = ["self", "team", "ally", "other"] as const;
-    const stops = [0, 1, 5, 9, 10, 11, 12, 13, 14, 15, 20, 50];
+    const levels = [0, 1, 2, 5, 10, 20, 50];
     const table: Record<string, bigint> = {};
     for (const rel of rels)
-      for (const visited of stops) {
-        table[`rel=${rel} stops=${visited}`] = config.trainGold(
+      for (const level of levels) {
+        table[`rel=${rel} level=${level}`] = config.trainGold(
           rel,
-          visited,
+          level,
           player(),
         );
       }
@@ -121,18 +121,18 @@ describe("train golden values", () => {
     for (const mult of [0.5, 2, 10]) {
       const c = makeConfig({ goldMultiplier: mult });
       for (const rel of ["self", "other"] as const) {
-        table[`mult=${mult} rel=${rel}`] = c.trainGold(rel, 0, player());
+        table[`mult=${mult} rel=${rel}`] = c.trainGold(rel, 1, player());
       }
     }
     const hostCheat = makeConfig({ hostCheats: { goldMultiplier: 5 } });
     table["hostCheat=5 creator rel=self"] = hostCheat.trainGold(
       "self",
-      0,
+      1,
       player(true),
     );
     table["hostCheat=5 non-creator rel=self"] = hostCheat.trainGold(
       "self",
-      0,
+      1,
       player(false),
     );
     expect(table).toMatchSnapshot();

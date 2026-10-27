@@ -31,6 +31,7 @@ export class TrainExecution implements Execution {
   private stations: TrainStation[] = [];
   private currentRailroad: OrientedRailroad | null = null;
   private speed: number = 2;
+  // Snapshot-compatible delivery counter. Intermediate rail nodes never pay.
   private _tradeStopsVisited: number = 0;
   private pathTiles: TileRef[] = [];
   private pathIndex: number = 0;
@@ -113,6 +114,7 @@ export class TrainExecution implements Execution {
   }
 
   tick(ticks: number): void {
+    if (!this.active) return;
     if (this.train === null) {
       throw new Error("Not initialized");
     }
@@ -122,19 +124,26 @@ export class TrainExecution implements Execution {
       return;
     }
 
-    this.reconcileCurrentRailroadSplit();
+    if (!this.reconcileCurrentRailroadSplit()) {
+      this.deleteTrain();
+      return;
+    }
 
     if (!this.activeSourceOrDestination()) {
       this.deleteTrain();
       return;
     }
 
-    const tile = this.getNextTile();
-    if (tile) {
+    const { tile, arrived } = this.getNextTile();
+    if (tile !== null) {
       this.updateCarsPositions(tile);
     } else {
-      this.targetReached();
+      if (arrived) this.targetReached();
       this.deleteTrain();
+      if (arrived) {
+        this.destination.onTrainStop(this);
+        this._tradeStopsVisited++;
+      }
     }
   }
 
@@ -196,6 +205,8 @@ export class TrainExecution implements Execution {
 
   private activeSourceOrDestination(): boolean {
     return (
+      this.source.isActive() &&
+      this.destination.isActive() &&
       this.stations.length > 1 &&
       this.stations[1].isActive() &&
       this.stations[0].isActive()
@@ -280,32 +291,48 @@ export class TrainExecution implements Execution {
    * client keeps following the original motion plan, so only replacement
    * segments whose concatenated tiles exactly match that plan are accepted.
    */
-  private reconcileCurrentRailroadSplit(): void {
-    if (this.currentRailroad === null || this.stations.length < 2) return;
+  private reconcileCurrentRailroadSplit(): boolean {
+    if (this.currentRailroad === null || this.stations.length < 2) return false;
 
     const [station0, station1] = this.stations;
-    if (station0.getRailroadTo(station1) !== null) return;
+    if (
+      station0.getRailroadTo(station1) ===
+      this.currentRailroad.getState().railroad
+    )
+      return true;
+    const direct = getOrientedRailroad(station0, station1);
+    if (direct) {
+      const oldTiles = this.currentRailroad.getTiles();
+      const tiles = direct.getTiles();
+      if (
+        tiles.length !== oldTiles.length ||
+        tiles.some((tile, i) => tile !== oldTiles[i])
+      )
+        return false;
+      this.currentRailroad = direct;
+      return true;
+    }
 
     const path = this.railNetwork.findStationsPath(station0, station1);
-    if (!path || path.length <= 2) return;
+    if (!path || path.length <= 2) return false;
 
     const segments: OrientedRailroad[] = [];
     let cursor = this.pathIndex;
     for (let i = 0; i < path.length - 1; i++) {
       const segment = getOrientedRailroad(path[i], path[i + 1]);
-      if (!segment) return;
+      if (!segment) return false;
       segments.push(segment);
       for (const tile of segment.getTiles()) {
-        if (this.pathTiles[cursor++] !== tile) return;
+        if (this.pathTiles[cursor++] !== tile) return false;
       }
     }
 
     const oldTiles = this.currentRailroad.getTiles();
-    if (cursor !== this.pathIndex + oldTiles.length) return;
+    if (cursor !== this.pathIndex + oldTiles.length) return false;
 
     // Drop replacement stations whose stop boundary is already behind the
-    // engine. A station exactly at the engine remains so stationReached() can
-    // process it normally and award gold once.
+    // engine. A station exactly at the engine remains as a route boundary;
+    // only the trip's final destination is eligible for a payout.
     let activeSegment = 0;
     let segmentStart = 0;
     let boundary = 0;
@@ -325,6 +352,7 @@ export class TrainExecution implements Execution {
     this.currentTile -= segmentStart;
     this.currentRailroad = segments[activeSegment];
     this.stations.splice(0, 2, ...path.slice(activeSegment));
+    return true;
   }
 
   /**
@@ -358,35 +386,30 @@ export class TrainExecution implements Execution {
     );
   }
 
-  private getNextTile(): TileRef | null {
+  private getNextTile(): { tile: TileRef | null; arrived: boolean } {
     if (this.currentRailroad === null || !this.canTradeWithDestination()) {
-      return null;
+      return { tile: null, arrived: false };
     }
     this.saveTraversedTiles(this.currentTile, this.speed);
     this.currentTile = this.currentTile + this.speed;
-    const leftOver = this.currentTile - this.currentRailroad.getTiles().length;
-    if (leftOver >= 0) {
-      // Station reached, pick the next station
-      this.stationReached();
+    while (this.currentTile >= this.currentRailroad.getTiles().length) {
+      const leftOver =
+        this.currentTile - this.currentRailroad.getTiles().length;
+      if (this.stations[1] === this.destination)
+        return { tile: null, arrived: true };
+      // Other stations are rail junctions, not economic stops.
       if (!this.nextStation()) {
-        return null; // Destination reached (or no valid connection)
+        return { tile: null, arrived: false };
       }
+      if (!this.canTradeWithDestination())
+        return { tile: null, arrived: false };
       this.currentTile = leftOver;
       this.saveTraversedTiles(0, leftOver);
     }
-    return this.currentRailroad.getTiles()[this.currentTile];
-  }
-
-  private stationReached() {
-    if (this.mg === null || this.player === null) {
-      throw new Error("Not initialized");
-    }
-    this.stations[1].onTrainStop(this);
-    const stationType = this.stations[1].unit.type();
-    if (stationType === UnitType.City || stationType === UnitType.Port) {
-      this._tradeStopsVisited++;
-    }
-    return;
+    return {
+      tile: this.currentRailroad.getTiles()[this.currentTile] ?? null,
+      arrived: false,
+    };
   }
 
   isActive(): boolean {

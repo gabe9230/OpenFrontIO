@@ -235,26 +235,25 @@ export class EngineConfig extends Config {
 
   trainGold(
     rel: "self" | "team" | "ally" | "other",
-    citiesVisited: number,
+    destinationLevel: number,
     player: PlayerLike,
   ): Gold {
-    // No penalty for the first 10 cities.
-    citiesVisited = Math.max(0, citiesVisited - 9);
     let baseGold: number;
     switch (rel) {
       case "ally":
-        baseGold = 35_000;
+        baseGold = 150_000;
         break;
       case "team":
       case "other":
-        baseGold = 25_000;
+        baseGold = 100_000;
         break;
       case "self":
-        baseGold = 10_000;
+        baseGold = 50_000;
         break;
     }
-    const distPenalty = citiesVisited * 5_000;
-    const gold = Math.max(5000, baseGold - distPenalty);
+    // Add 10% of the base per destination level. Integer arithmetic keeps
+    // e.g. allied level 10 exactly 300k and other level 5 exactly 150k.
+    const gold = baseGold + (baseGold / 10) * destinationLevel;
     return toInt(gold * this.goldMultiplierFor(player));
   }
 

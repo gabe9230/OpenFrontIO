@@ -72,11 +72,70 @@ async function currentSegmentFixture(
     stationB.addRailroad(second);
   };
 
-  return { exec, insertedStation, player, splitRail };
+  return {
+    exec,
+    insertedStation,
+    player,
+    splitRail,
+    source,
+    destination,
+    originalRailroad,
+  };
 }
 
 describe("TrainExecution", () => {
-  it("visits and pays a station inserted ahead of the engine", async () => {
+  it("despawns at the final destination and pays exactly once, with no intermediate payouts", async () => {
+    const { exec, player, source, destination, insertedStation, splitRail } =
+      await currentSegmentFixture(4);
+    const sourceStop = vi.spyOn(source, "onTrainStop");
+    const intermediateStop = vi.spyOn(insertedStation, "onTrainStop");
+    const originalStop = destination.onTrainStop.bind(destination);
+    const finalStop = vi
+      .spyOn(destination, "onTrainStop")
+      .mockImplementation((train) => {
+        expect(player.units(UnitType.Train)).toHaveLength(0);
+        originalStop(train);
+      });
+    splitRail();
+    for (let tick = 1; tick <= 10; tick++) exec.tick(tick);
+    expect(exec.isActive()).toBe(false);
+    expect(sourceStop).not.toHaveBeenCalled();
+    expect(intermediateStop).not.toHaveBeenCalled();
+    expect(finalStop).toHaveBeenCalledTimes(1);
+    expect(player.trainGold()).toBe(55_000n);
+  });
+
+  it("uses the destination level when the train arrives", async () => {
+    const { exec, player, destination } = await currentSegmentFixture(4);
+    exec.tick(1);
+    for (let level = 1; level < 10; level++) destination.unit.increaseLevel();
+    for (let tick = 2; tick <= 10; tick++) exec.tick(tick);
+    expect(player.trainGold()).toBe(100_000n);
+  });
+
+  it("despawns without paying if the destination is destroyed", async () => {
+    const { exec, player, destination } = await currentSegmentFixture(4);
+    exec.tick(1);
+    destination.unit.delete(false);
+    exec.tick(2);
+    expect(exec.isActive()).toBe(false);
+    expect(player.units(UnitType.Train)).toHaveLength(0);
+    expect(player.trainGold()).toBe(0n);
+  });
+
+  it("does not award delivery gold when the active rail connection is removed", async () => {
+    const { exec, player, source, destination, originalRailroad } =
+      await currentSegmentFixture(4);
+    exec.tick(1);
+    source.removeRailroad(originalRailroad);
+    destination.removeRailroad(originalRailroad);
+    exec.tick(2);
+    expect(exec.isActive()).toBe(false);
+    expect(player.units(UnitType.Train)).toHaveLength(0);
+    expect(player.trainGold()).toBe(0n);
+  });
+
+  it("passes a station inserted ahead without stopping or paying", async () => {
     const { exec, insertedStation, player, splitRail } =
       await currentSegmentFixture(4);
     const onTrainStop = vi.spyOn(insertedStation, "onTrainStop");
@@ -86,8 +145,8 @@ describe("TrainExecution", () => {
     exec.tick(2);
 
     expect(exec.isActive()).toBe(true);
-    expect(onTrainStop).toHaveBeenCalledTimes(1);
-    expect(player.trainGold()).toBe(10_000n);
+    expect(onTrainStop).not.toHaveBeenCalled();
+    expect(player.trainGold()).toBe(0n);
   });
 
   it("does not visit or pay a station inserted behind the engine", async () => {
@@ -105,7 +164,7 @@ describe("TrainExecution", () => {
     expect(player.trainGold()).toBe(0n);
   });
 
-  it("visits and pays a station inserted exactly at the engine once", async () => {
+  it("passes a station inserted at the engine without stopping or paying", async () => {
     const { exec, insertedStation, player, splitRail } =
       await currentSegmentFixture(2);
     const onTrainStop = vi.spyOn(insertedStation, "onTrainStop");
@@ -115,8 +174,8 @@ describe("TrainExecution", () => {
     exec.tick(2);
     exec.tick(3);
 
-    expect(onTrainStop).toHaveBeenCalledTimes(1);
-    expect(player.trainGold()).toBe(10_000n);
+    expect(onTrainStop).not.toHaveBeenCalled();
+    expect(player.trainGold()).toBe(0n);
   });
 
   it("does not revisit a passed station while travelling in reverse", async () => {
