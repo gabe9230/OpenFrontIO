@@ -6,6 +6,7 @@ import {
 import { assetUrl } from "@openfront/shared/AssetUrls";
 import { GameEnv } from "@openfront/shared/configuration/Env";
 import { EventBus } from "@openfront/shared/EventBus";
+import { PRIVATE_LOBBIES_ONLY } from "@openfront/shared/PrivateLobbyPolicy";
 import { toWireGameStartInfo } from "@openfront/shared/SharedUtil";
 import {
   GameInfo,
@@ -522,10 +523,11 @@ class Client {
       tag: "single-player-modal",
       pageId: "page-single-player",
     });
-    modalRouter.register("ranked", {
-      tag: "ranked-modal",
-      pageId: "page-ranked",
-    });
+    if (!PRIVATE_LOBBIES_ONLY)
+      modalRouter.register("ranked", {
+        tag: "ranked-modal",
+        pageId: "page-ranked",
+      });
     modalRouter.register("detailed-view", {
       tag: "detailed-view-modal",
       pageId: "page-detailed-view",

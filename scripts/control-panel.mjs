@@ -175,6 +175,10 @@ export async function createControlPanel({
   }
   async function publish() {
     const s = await status();
+    if (s.metrics?.publication?.state === "publishing")
+      throw new Error(
+        "The server is already publishing its address automatically.",
+      );
     if (!s.running || !s.metrics?.publicUrl)
       throw new Error(
         "Start the public tunnel and wait for its address before publishing.",

@@ -31,6 +31,7 @@ export class GameManager {
   constructor(
     private log: Logger,
     private readonly gatekeeper: Gatekeeper = noopGatekeeper,
+    private readonly privateOnly = false,
   ) {
     setInterval(() => this.tick(), 1000);
   }
@@ -80,6 +81,11 @@ export class GameManager {
     matchmakingTeams?: string[][],
     matchmakingClanTags?: string[],
   ): GameServer | null {
+    if (
+      this.privateOnly &&
+      (gameConfig?.gameType === GameType.Public || publicGameType !== undefined)
+    )
+      return null;
     if (this.games.has(id)) {
       this.log.warn("cannot create game, id already exists", { gameID: id });
       return null;

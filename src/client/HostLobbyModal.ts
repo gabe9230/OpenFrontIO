@@ -13,6 +13,7 @@ import {
 import { DoomsdayClockSpeed } from "@openfront/engine-lib/game/DoomsdayClock";
 import { GameEnv } from "@openfront/shared/configuration/Env";
 import { EventBus } from "@openfront/shared/EventBus";
+import { PRIVATE_LOBBIES_ONLY } from "@openfront/shared/PrivateLobbyPolicy";
 import {
   ClientInfo,
   LOBBY_QUEUE_CUTOFF_MS,
@@ -296,6 +297,7 @@ export class HostLobbyModal extends BaseModal {
   // one-way (the server rejects unlisting), so the Private segment goes away
   // once the lobby is listed.
   private renderVisibilityToggle() {
+    if (PRIVATE_LOBBIES_ONLY) return nothing;
     const segment = (labelKey: string, isPublic: boolean) => html`
       <button
         class="px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full transition-all ${
@@ -406,6 +408,7 @@ export class HostLobbyModal extends BaseModal {
   }
 
   private handleVisibilitySelect(isPublic: boolean) {
+    if (PRIVATE_LOBBIES_ONLY) return;
     if (
       this.listingRequestInFlight ||
       isPublic === this.publiclyListed ||

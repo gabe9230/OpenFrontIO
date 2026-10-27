@@ -26,6 +26,7 @@ const sockets = new Set();
 const gameSockets = new Set();
 const startedAt = Date.now();
 let publicUrl = null;
+const publication = { state: "idle", error: null };
 let requests = 0;
 let errors = 0;
 let closedBytesIn = 0;
@@ -167,6 +168,7 @@ const gateway = http.createServer((req, res) => {
             workers,
             shared: share,
             publicUrl,
+            publication,
             requests,
             errors,
             bytesIn:
@@ -391,6 +393,58 @@ console.log(
   "Keep this launcher running. Press Ctrl+C to stop the game and tunnel.",
 );
 
+function publishArcadeAddress() {
+  if (stopping || publication.state === "publishing") return;
+  publication.state = "publishing";
+  publication.error = null;
+  const output = createWriteStream(path.join(runtime, "publish.log"), {
+    flags: "a",
+  });
+  const publisher = spawn(
+    process.execPath,
+    [path.join(root, "scripts/publish-host-endpoint.mjs")],
+    {
+      cwd: root,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  children.push(publisher);
+  publisher.stdout.pipe(output, { end: false });
+  publisher.stderr.pipe(output, { end: false });
+  publisher.on("error", (error) => {
+    publication.state = "failed";
+    publication.error = error.message;
+    output.end();
+  });
+  publisher.on("close", async (code) => {
+    output.end();
+    if (stopping) return;
+    if (code !== 0) {
+      publication.state = "failed";
+      publication.error =
+        "Automatic arcade update failed. Check Publishing logs or retry Update arcade address.";
+      console.error(publication.error);
+      return;
+    }
+    publication.state = "deploying";
+    for (let i = 0; i < 36 && !stopping; i++) {
+      try {
+        const response = await fetch(
+          `https://raw.githubusercontent.com/gabe9230/gabe9230.github.io/main/Arcade/openfront/server.json?t=${Date.now()}`,
+          { cache: "no-store", signal: AbortSignal.timeout(5000) },
+        );
+        if (response.ok && (await response.json()).serverUrl === publicUrl) {
+          publication.state = "published";
+          console.log("Arcade automatically updated to this server address.");
+          return;
+        }
+      } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  });
+}
+
 if (share) {
   const executable =
     process.env.CLOUDFLARED_PATH ||
@@ -439,7 +493,8 @@ if (share) {
         JSON.stringify(endpoint, null, 2) + "\n",
       );
       console.log(`Public game address: ${match[0]}`);
-      console.log("Publish this address to the arcade: npm run host:publish");
+      console.log("Automatically updating the arcade server address…");
+      publishArcadeAddress();
     });
   tunnel.on("exit", (code) => {
     if (!stopping) {

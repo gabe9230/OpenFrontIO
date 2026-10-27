@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { lobbyPath, inviteFromPath } from "../deployment/arcade/lobby-url.mjs";
+import { findServer } from "../deployment/arcade/server-connection.mjs";
 import { routeRequest, selfhostHtml } from "../scripts/selfhost-routing.mjs";
 
 test("worker APIs preserve queries and route to their owning worker", () => {
@@ -61,4 +62,64 @@ test("self-hosted HTML keeps the game and bootstrap but omits official-site ad s
   assert.ok(result.includes("© OpenFront and Contributors"));
   assert.ok(!result.includes("ads.example"));
   assert.ok(!result.includes("window.ramp"));
+});
+test("arcade chooses the latest reachable repository address over a stale Pages deployment", async () => {
+  const requests = [];
+  const origin = await findServer({
+    pageOrigin: "https://gabrielhalloran.org",
+    fetcher: async (url) => {
+      requests.push(url);
+      if (url.startsWith("https://raw.githubusercontent.com"))
+        return {
+          ok: true,
+          json: async () => ({
+            serverUrl: "https://new.example",
+            updatedAt: "2026-10-27T02:00:00Z",
+          }),
+        };
+      if (url.startsWith("./server.json"))
+        return {
+          ok: true,
+          json: async () => ({
+            serverUrl: "https://old.example",
+            updatedAt: "2026-10-27T01:00:00Z",
+          }),
+        };
+      if (url === "https://new.example/selfhost/health")
+        return { ok: true, json: async () => ({ online: true }) };
+      throw new Error("Stale address must not be used.");
+    },
+  });
+  assert.equal(origin, "https://new.example");
+  assert.ok(!requests.some((url) => url.startsWith("https://old.example")));
+});
+
+test("arcade falls back to local configuration when repository access is unavailable", async () => {
+  const origin = await findServer({
+    pageOrigin: "http://localhost:9081",
+    fetcher: async (url) => {
+      if (url.startsWith("https://raw")) throw new Error("Unavailable");
+      return {
+        ok: true,
+        json: async () =>
+          url.startsWith("./")
+            ? { serverUrl: "http://localhost:9080" }
+            : { online: true },
+      };
+    },
+  });
+  assert.equal(origin, "http://localhost:9080");
+});
+
+test("arcade rejects invalid addresses and reports a recoverable offline state", async () => {
+  await assert.rejects(
+    findServer({
+      pageOrigin: "https://gabrielhalloran.org",
+      fetcher: async () => ({
+        ok: true,
+        json: async () => ({ serverUrl: "http://unsafe.example" }),
+      }),
+    }),
+    /Reconnecting automatically/,
+  );
 });

@@ -24,9 +24,10 @@ the browser does not stop the game or the panel.
 - Tribe count, nations, difficulty, gold multiplier and starting gold are
   defaults for **new private lobbies**. Explicit host choices take priority;
   already-created lobbies and running matches keep their settings.
-- After starting a new public tunnel, click **Update arcade address**. This
-  pushes only the generated server address to your website and triggers Pages
-  deployment. GitHub sign-in must be available on this PC.
+- New public tunnel addresses are published automatically on every start,
+  including starts from the panel and command-line launcher. The panel shows
+  publication progress. **Update arcade address** is available to retry a failed
+  update. GitHub sign-in must be available on this PC.
 - The logs viewer has game, tunnel, launcher and publishing sources. Pause
   freezes the view; it does not pause the server.
 
@@ -51,7 +52,7 @@ Stop it with Ctrl+C; this stops the game, workers, and tunnel together.
 You can also double-click `Start-OpenFront.cmd`. To stop a launcher running in
 the background, use `npm run host:stop` from another terminal.
 
-After a restart, publish the new tunnel address from a second terminal:
+The launcher publishes each new tunnel address automatically. To retry manually:
 
 ```powershell
 npm run host:publish
@@ -62,6 +63,13 @@ This updates and commits only `Arcade/openfront/server.json` in
 are excluded. The initial arcade files must already be installed and committed.
 GitHub Pages normally needs a little time to deploy. Set `ARCADE_SITE_REPO` to
 use another website checkout. GitHub authentication is required for the push.
+The arcade checks the latest repository address first, with the deployed copy
+as a fallback, so it can connect before Pages finishes redeploying. While the
+host is offline or starting, the page retries automatically every five seconds.
+
+This fork supports only solo play and private invitation lobbies. Public lobby
+scheduling, creation, listing, queues, browsing, and ranked matchmaking are
+disabled. Share your private lobby's URL to invite friends.
 
 ## Play with friends
 

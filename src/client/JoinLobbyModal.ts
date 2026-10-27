@@ -2,6 +2,7 @@ import { GameMode, GameType } from "@openfront/engine-api/game/GameTypes";
 import { GAME_ID_REGEX, GameConfig } from "@openfront/engine-api/Schemas";
 import { assetUrl } from "@openfront/shared/AssetUrls";
 import { EventBus } from "@openfront/shared/EventBus";
+import { PRIVATE_LOBBIES_ONLY } from "@openfront/shared/PrivateLobbyPolicy";
 import {
   ClientInfo,
   GameInfo,
@@ -368,6 +369,7 @@ export class JoinLobbyModal extends BaseModal {
   }
 
   private renderHostedLobbies() {
+    if (PRIVATE_LOBBIES_ONLY) return html``;
     let content: TemplateResult;
     if (!this.hostedLobbiesLoaded) {
       content = html`<div class="flex justify-center py-3">
@@ -534,7 +536,7 @@ export class JoinLobbyModal extends BaseModal {
     // disconnect the player mid game-start.
     this.leaveLobbyOnClose = true;
     this.hostedLobbiesLoaded = false;
-    void this.hostedLobbySocket.start();
+    if (!PRIVATE_LOBBIES_ONLY) void this.hostedLobbySocket.start();
     const lobbyId = typeof args?.lobbyId === "string" ? args.lobbyId : "";
     const lobbyInfo = args?.lobbyInfo as GameInfo | PublicGameInfo | undefined;
     if (lobbyId) {

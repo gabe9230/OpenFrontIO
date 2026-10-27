@@ -5,6 +5,7 @@ import {
 } from "@openfront/engine-api/Schemas";
 import { CloseCode, CloseReason } from "@openfront/shared/CloseCodes";
 import { GameEnv } from "@openfront/shared/configuration/Env";
+import { PRIVATE_LOBBIES_ONLY } from "@openfront/shared/PrivateLobbyPolicy";
 import { generateID, replacer } from "@openfront/shared/SharedUtil";
 import {
   ClientMessage,
@@ -162,6 +163,7 @@ export function createAdmissionGuard(
 // Creator-only; listing requires an active subscription (checked fresh
 // against the API) and is limited to one listed lobby per creator.
 export function registerListingRoute(opts: {
+  privateOnly?: boolean;
   app: express.Express;
   gm: GameManager;
   lobbyService: WorkerLobbyService;
@@ -172,6 +174,7 @@ export function registerListingRoute(opts: {
   app.post(
     "/api/game/:id/listing",
     async (req: Request<{ id: string }>, res: Response) => {
+      if (opts.privateOnly) return res.sendStatus(404);
       const authHeader = req.headers.authorization;
       if (!authHeader?.startsWith("Bearer ")) {
         return res.status(400).json({ error: "Authorization header required" });
@@ -296,7 +299,7 @@ export async function startWorker() {
   });
 
   const gatekeeper = await loadGatekeeper(log);
-  const gm = new GameManager(log, gatekeeper);
+  const gm = new GameManager(log, gatekeeper, PRIVATE_LOBBIES_ONLY);
   app.get("/api/selfhost/snapshot", (req, res) => {
     if (
       !process.env.SELFHOST_SETTINGS_PATH ||
@@ -315,7 +318,7 @@ export async function startWorker() {
   const lobbyService = new WorkerLobbyService(server, wss, gm, log);
   const singleplayerPresence = new SingleplayerPresence();
 
-  if (!process.env.SELFHOST_SETTINGS_PATH)
+  if (!PRIVATE_LOBBIES_ONLY && !process.env.SELFHOST_SETTINGS_PATH)
     setTimeout(
       () => {
         // The ranked loop follows the deployment-active flag the master pushes
@@ -502,12 +505,19 @@ export async function startWorker() {
     });
   });
 
-  registerListingRoute({ app, gm, lobbyService, log });
+  registerListingRoute({
+    app,
+    gm,
+    lobbyService,
+    log,
+    privateOnly: PRIVATE_LOBBIES_ONLY,
+  });
 
   // The host of a listed lobby pays (plutonium, charged by the API with the
   // host's token) to put it in the public Special queue, right behind the
   // lobby that's counting down.
   app.post("/api/game/:id/queue", async (req, res) => {
+    if (PRIVATE_LOBBIES_ONLY) return res.sendStatus(404);
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
       return res.status(400).json({ error: "Authorization header required" });

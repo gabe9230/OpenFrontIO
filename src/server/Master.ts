@@ -1,4 +1,5 @@
 import { GameEnv } from "@openfront/shared/configuration/Env";
+import { PRIVATE_LOBBIES_ONLY } from "@openfront/shared/PrivateLobbyPolicy";
 import cluster, { Worker } from "cluster";
 import crypto from "crypto";
 import express from "express";
@@ -166,7 +167,12 @@ export async function startMaster() {
   // A server that registers schedules nothing until the API calls it open: a
   // mistyped letter must not mint lobbies under a letter routed elsewhere.
   const registers = checkinBody(0) !== null;
-  lobbyService = new MasterLobbyService(playlist, log, registers);
+  lobbyService = new MasterLobbyService(
+    playlist,
+    log,
+    registers,
+    PRIVATE_LOBBIES_ONLY,
+  );
 
   const INSTANCE_ID =
     ServerEnv.env() === GameEnv.Dev
@@ -184,7 +190,7 @@ export async function startMaster() {
   // own lobbies exactly as it does without a coordinator.
   const hello = checkinBody(0);
   const coordinator = coordinatorUrl(registeredSite());
-  if (coordinator !== null && hello !== null) {
+  if (!PRIVATE_LOBBIES_ONLY && coordinator !== null && hello !== null) {
     log.info(`Joining lobby coordinator at ${coordinator}`);
     const client = new LobbyCoordinatorClient({
       url: coordinator,

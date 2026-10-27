@@ -1,5 +1,6 @@
 import { GameMapType, GameType } from "@openfront/engine-api/game/GameTypes";
 import { UserMeResponse } from "@openfront/shared/ApiSchemas";
+import { PRIVATE_LOBBIES_ONLY } from "@openfront/shared/PrivateLobbyPolicy";
 import { PublicGameInfo, PublicGames } from "@openfront/shared/WireSchemas";
 import { html, LitElement, nothing, type TemplateResult } from "lit";
 import { customElement, state } from "lit/decorators.js";
@@ -556,6 +557,7 @@ export class GameModeSelector extends LitElement {
   }
 
   private openLobbyFeed(refreshList = false) {
+    if (PRIVATE_LOBBIES_ONLY) return;
     this.feedWanted = true;
     this.feedGaveUp = false;
     if (lobbyFeedSuspended(this.desktopSessionState)) {
@@ -650,6 +652,21 @@ export class GameModeSelector extends LitElement {
   }
 
   render() {
+    if (PRIVATE_LOBBIES_ONLY)
+      return html` <div class="grid grid-cols-2 gap-4 w-full px-4 pb-4 sm:px-0">
+        <div class="h-14">
+          ${this.renderSmallActionCard(translateText("main.solo"), this.openSinglePlayerModal, PRIMARY_ACTION)}
+        </div>
+        <div class="h-14">
+          ${this.renderSmallActionCard(translateText("main.tutorial"), this.startTutorial, TUTORIAL_ACTION)}
+        </div>
+        <div class="h-14">
+          ${this.renderSmallActionCard(translateText("main.create"), this.openHostLobby, SECONDARY_ACTION, undefined, true)}
+        </div>
+        <div class="h-14">
+          ${this.renderSmallActionCard(translateText("main.join"), this.openJoinLobby, SECONDARY_ACTION, undefined, true)}
+        </div>
+      </div>`;
     const ffa = this.lobbies?.games?.["ffa"]?.[0];
     const teams = this.lobbies?.games?.["team"]?.[0];
     const special = this.lobbies?.games?.["special"]?.[0];

@@ -1,4 +1,5 @@
 import { lobbyPath, inviteFromPath } from "./lobby-url.mjs";
+import { findServer } from "./server-connection.mjs";
 
 const frame = document.querySelector("#game");
 const notice = document.querySelector("#notice");
@@ -6,56 +7,17 @@ const message = document.querySelector("#message");
 let serverOrigin = null;
 let connecting = false;
 let generation = 0;
+let retryTimer;
 
 async function connect() {
   if (connecting) return;
   connecting = true;
+  clearTimeout(retryTimer);
   const current = ++generation;
   message.textContent = "Connecting to the community game server…";
   try {
-    const configResponse = await fetch(`./server.json?t=${Date.now()}`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!configResponse.ok)
-      throw new Error("The game connection has not been configured yet.");
-    const config = await configResponse.json();
-    if (!config.serverUrl)
-      throw new Error(
-        "The host has not started the game server yet. Please try again later.",
-      );
-    const server = new URL(config.serverUrl);
-    const local =
-      server.hostname === "localhost" || server.hostname === "127.0.0.1";
-    if (
-      server.protocol !== "https:" &&
-      !(
-        location.hostname === "localhost" &&
-        local &&
-        server.protocol === "http:"
-      )
-    )
-      throw new Error("The game server needs an HTTPS address.");
-    if (
-      server.username ||
-      server.password ||
-      server.pathname !== "/" ||
-      server.search ||
-      server.hash
-    )
-      throw new Error("Invalid game server address.");
     const target = lobbyPath(location.search);
-    serverOrigin = server.origin;
-    // A simple cross-origin image-free fetch checks the gateway without needing
-    // broad CORS access. The PC's health endpoint explicitly allows this site.
-    const healthResponse = await fetch(`${serverOrigin}/selfhost/health`, {
-      signal: AbortSignal.timeout(12000),
-      cache: "no-store",
-    });
-    if (!healthResponse.ok || !(await healthResponse.json()).online)
-      throw new Error(
-        "The host's PC is currently offline. Try again when the host starts the game.",
-      );
+    serverOrigin = await findServer();
     if (current !== generation) return;
     frame.src = serverOrigin + target;
     frame.hidden = false;
@@ -67,6 +29,7 @@ async function connect() {
         : error.message;
     frame.hidden = true;
     notice.hidden = false;
+    retryTimer = setTimeout(connect, 5000);
   } finally {
     connecting = false;
   }
@@ -93,6 +56,19 @@ addEventListener("message", (event) => {
 });
 document.querySelector("#retry").addEventListener("click", connect);
 addEventListener("popstate", () => {
-  if (serverOrigin) frame.src = serverOrigin + lobbyPath(location.search);
+  connect();
 });
 connect();
+
+setInterval(async () => {
+  if (frame.hidden || connecting || !serverOrigin) return;
+  try {
+    const health = await fetch(`${serverOrigin}/selfhost/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!health.ok || !(await health.json()).online) connect();
+  } catch {
+    connect();
+  }
+}, 15000);

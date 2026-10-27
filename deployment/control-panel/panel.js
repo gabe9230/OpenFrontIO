@@ -114,7 +114,8 @@ function render(s) {
   $("#start").disabled = busy || s.running;
   $("#stop").disabled = busy || !s.running;
   $("#restart").disabled = busy || !s.running;
-  $("#publish").disabled = busy || !m?.publicUrl;
+  $("#publish").disabled =
+    busy || !m?.publicUrl || m?.publication?.state === "publishing";
   $("#copy-endpoint").disabled = !m?.publicUrl;
   $("#endpoint").textContent =
     m?.publicUrl ||
@@ -164,9 +165,13 @@ function render(s) {
       s.lastError ||
       (s.restartRequired
         ? "Saved host settings will take effect after a restart. Restarting ends active matches."
-        : m?.publicUrl && s.published !== m.publicUrl
-          ? "Your public address has changed. Click Update arcade address to publish it to your website."
-          : null);
+        : m?.publication?.state === "publishing"
+          ? "Automatically publishing the new server address to the arcade…"
+          : m?.publication?.state === "failed"
+            ? m.publication.error
+            : m?.publicUrl && s.published !== m.publicUrl
+              ? "Updating the arcade address automatically. Update arcade address can retry a failed publication."
+              : null);
     if (next) notify(next, Boolean(s.lastError));
     else if (derivedNotice) notify("");
     derivedNotice = next;

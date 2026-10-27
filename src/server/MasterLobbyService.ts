@@ -87,6 +87,7 @@ export class MasterLobbyService {
     private playlist: MapPlaylist,
     private log: winston.Logger,
     awaitApiState = false,
+    private readonly privateOnly = false,
   ) {
     this.active = !awaitApiState;
     this.stateKnown = !awaitApiState;
@@ -194,6 +195,7 @@ export class MasterLobbyService {
   // recentMaps (what the site just played) is not yet fed to the playlist —
   // its no-consecutive-repeat rule stays per server for now.
   private async handleCoordinatorCreate(msg: CoordinatorCreateGame) {
+    if (this.privateOnly) return;
     if (!this.active || !this.started) {
       this.log.info(
         `refusing coordinator createGame (${msg.publicGameType}): ${
@@ -264,9 +266,10 @@ export class MasterLobbyService {
     );
     if (this.readyWorkers.size === ServerEnv.numWorkers() && !this.started) {
       this.started = true;
-      this.log.info("All workers ready, starting game scheduling");
+      this.log.info("All workers ready");
       startPolling(async () => this.broadcastLobbies(), 500);
-      startPolling(async () => await this.maybeScheduleLobby(), 1000);
+      if (!this.privateOnly)
+        startPolling(async () => await this.maybeScheduleLobby(), 1000);
     }
   }
 
@@ -430,6 +433,7 @@ export class MasterLobbyService {
   }
 
   private async maybeScheduleLobby() {
+    if (this.privateOnly) return;
     // Coordinated: the site's queue depth and countdowns are the
     // coordinator's; adding our own here would double-schedule.
     if (this.isCoordinated()) return;
