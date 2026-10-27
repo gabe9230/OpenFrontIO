@@ -9,10 +9,21 @@ const website =
 const endpoint = JSON.parse(
   await readFile(path.join(root, ".selfhost/endpoint.json"), "utf8"),
 );
-const health = await fetch(`${endpoint.serverUrl}/selfhost/health`, {
-  signal: AbortSignal.timeout(15000),
-});
-if (!health.ok || !(await health.json()).online)
+let ready = false;
+for (let attempt = 0; attempt < 20; attempt++) {
+  try {
+    const health = await fetch(`${endpoint.serverUrl}/selfhost/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (health.ok && (await health.json()).online) {
+      ready = true;
+      break;
+    }
+  } catch {}
+  console.log("Waiting for the new public tunnel address to become reachable…");
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+}
+if (!ready)
   throw new Error(
     "The public tunnel is offline. Run npm run host:share first.",
   );
