@@ -2,6 +2,7 @@
 export function routeRequest(rawUrl, method = "GET", workers = 2) {
   const url = new URL(rawUrl, "http://localhost");
   const pathname = url.pathname;
+  if (/\/api\/selfhost(?:\/|$)/.test(pathname)) return null;
   if (/\/(?:adminbot|admin|debug)(?:\/|$)/i.test(pathname)) return null;
   const worker = pathname.match(/^\/w(\d+)(\/.*)?$/);
   if (worker) {

@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>OpenFront — Server Control</title>
+    <link rel="stylesheet" href="/panel.css" />
+  </head>
+  <body>
+    <aside>
+      <a class="brand" href="#overview"
+        ><span class="brand-icon">◈</span> OPENFRONT<small
+          >SERVER CONTROL</small
+        ></a
+      >
+      <div class="rail-label">WORKSPACE</div>
+      <nav>
+        <a href="#overview">◉ <span>Overview</span></a
+        ><a href="#settings">⚙ <span>Configuration</span></a
+        ><a href="#logs">≡ <span>Live logs</span></a>
+      </nav>
+      <div class="rail-bottom">
+        <span class="local-dot"></span> LOCAL ACCESS ONLY
+        <p>This panel runs on your PC.<br />Players cannot access it.</p>
+        <a
+          href="https://gabrielhalloran.org/Arcade/openfront/"
+          target="_blank"
+          rel="noopener"
+          >Open arcade ↗</a
+        >
+      </div>
+    </aside>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">YOUR PC / COMMUNITY SERVER</p>
+          <h1>Server overview</h1>
+          <p class="muted">Run the world. Keep an eye on everything.</p>
+        </div>
+        <div class="badge" id="connection">Connecting…</div>
+      </header>
+      <section id="overview" class="server-card">
+        <div class="server-heading">
+          <div>
+            <div class="label">GAME SERVER</div>
+            <h2 id="server-title">Checking status…</h2>
+            <p id="server-detail" class="muted">
+              Looking for the local game gateway.
+            </p>
+          </div>
+          <div class="controls">
+            <button id="start" class="primary" data-action="start">
+              ▶ Start server</button
+            ><button id="restart" data-action="restart">↻ Restart</button
+            ><button id="stop" class="danger" data-action="stop">■ Stop</button>
+          </div>
+        </div>
+        <div class="endpoint">
+          <span>PUBLIC ENDPOINT</span
+          ><a id="endpoint" target="_blank" rel="noopener">Not connected</a
+          ><button id="copy-endpoint" class="small" disabled>Copy</button
+          ><button id="publish" class="small" data-action="publish" disabled>
+            Update arcade address
+          </button>
+        </div>
+        <p class="fine">
+          Stopping or restarting ends active matches. The control panel stays
+          open.
+        </p>
+        <p id="notice" class="notice" role="status" hidden></p>
+      </section>
+      <section class="metrics" aria-label="Server metrics">
+        <article>
+          <div class="label">PLAYERS CONNECTED</div>
+          <strong id="clients">—</strong
+          ><span id="connections">Waiting for gateway</span>
+        </article>
+        <article>
+          <div class="label">SERVER UPTIME</div>
+          <strong id="uptime">—</strong
+          ><span id="workers">No workers running</span>
+        </article>
+        <article>
+          <div class="label">DATA TRANSFERRED</div>
+          <strong id="bandwidth">—</strong
+          ><span id="traffic-rate">Upload + download</span>
+        </article>
+        <article>
+          <div class="label">GATEWAY MEMORY</div>
+          <strong id="memory">—</strong
+          ><span id="latency">HTTP response average</span>
+        </article>
+      </section>
+      <section class="activity card">
+        <div class="section-title">
+          <div>
+            <h2>Network activity</h2>
+            <p class="muted">Gateway traffic over the last two minutes</p>
+          </div>
+          <div class="chart-key"><i></i> Bytes per second</div>
+        </div>
+        <svg
+          id="traffic-chart"
+          viewBox="0 0 900 125"
+          preserveAspectRatio="none"
+          aria-label="Live network traffic chart"
+        >
+          <defs>
+            <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+              <stop stop-color="#b8ee91" stop-opacity=".2" />
+              <stop offset="1" stop-color="#b8ee91" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+          <path id="chart-area" fill="url(#fill)" />
+          <path
+            id="chart-line"
+            fill="none"
+            stroke="#b8ee91"
+            stroke-width="2"
+            vector-effect="non-scaling-stroke"
+          />
+        </svg>
+        <div class="activity-footer">
+          <span id="requests">0 HTTP requests</span
+          ><span id="games">0 games tracked</span
+          ><span id="errors">0 server errors</span
+          ><span>Updates every 2 seconds</span>
+        </div>
+      </section>
+      <section id="settings" class="card">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">CONFIGURATION</p>
+            <h2>Make it your server</h2>
+            <p class="muted">
+              Limits apply immediately. Port, workers, and tunnel changes need a
+              restart.
+            </p>
+          </div>
+          <span id="settings-state" class="tag">Saved locally</span>
+        </div>
+        <form id="settings-form">
+          <div class="settings-columns">
+            <fieldset>
+              <legend>Host & network</legend>
+              <label
+                >Game gateway port<input
+                  name="port"
+                  type="number"
+                  min="1024"
+                  max="65535"
+                  required
+              /></label>
+              <label
+                >Worker processes<input
+                  name="workers"
+                  type="number"
+                  min="1"
+                  max="8"
+                  required
+                /><small
+                  >Each worker can manage several simultaneous games.</small
+                ></label
+              >
+              <label
+                >Maximum WebSocket connections<input
+                  name="maxConnections"
+                  type="number"
+                  min="2"
+                  max="1000"
+                  required
+                /><small
+                  >Includes players and lobby-list subscriptions.</small
+                ></label
+              >
+              <label class="check"
+                ><input name="share" type="checkbox" /><span
+                  >Public HTTPS tunnel<small
+                    >Allow friends to connect from outside your network.</small
+                  ></span
+                ></label
+              >
+              <label class="check"
+                ><input name="allowNewLobbies" type="checkbox" /><span
+                  >Accept new lobbies<small
+                    >Turn off to prevent new games while current matches
+                    continue.</small
+                  ></span
+                ></label
+              >
+            </fieldset>
+            <fieldset>
+              <legend>New private lobby defaults</legend>
+              <label
+                >Tribes<input
+                  name="bots"
+                  type="number"
+                  min="0"
+                  max="400"
+                  required
+              /></label>
+              <label
+                >Nations<select name="nationMode">
+                  <option value="default">Map default</option>
+                  <option value="disabled">Disabled</option>
+                  <option value="custom">Custom count</option></select
+                ><input
+                  aria-label="Custom nation count"
+                  name="nationCount"
+                  type="number"
+                  min="1"
+                  max="400"
+                  value="72"
+                  hidden
+              /></label>
+              <label
+                >Nation difficulty<select name="difficulty">
+                  <option>Easy</option>
+                  <option>Medium</option>
+                  <option>Hard</option>
+                  <option>Impossible</option>
+                </select></label
+              >
+              <div class="input-pair">
+                <label
+                  >Gold multiplier<input
+                    name="goldMultiplier"
+                    type="number"
+                    min="0.1"
+                    max="1000"
+                    step="0.1"
+                    required /></label
+                ><label
+                  >Starting gold<input
+                    name="startingGold"
+                    type="number"
+                    min="0"
+                    max="1000000000"
+                    required
+                /></label>
+              </div>
+              <p class="fine">
+                Defaults affect newly created private lobbies. Hosts can change
+                their own lobby settings. Running matches are unchanged.
+              </p>
+            </fieldset>
+          </div>
+          <div class="form-footer">
+            <span id="save-detail" class="muted"
+              >Settings are stored on this PC.</span
+            ><button type="submit" class="primary">Save configuration</button>
+          </div>
+        </form>
+      </section>
+      <section id="logs" class="card">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">DIAGNOSTICS</p>
+            <h2>Live logs</h2>
+          </div>
+          <div class="log-controls">
+            <select id="log-source" aria-label="Log source">
+              <option value="server">Game server</option>
+              <option value="tunnel">HTTPS tunnel</option>
+              <option value="launcher">Launcher</option>
+              <option value="publish">Publishing</option></select
+            ><label class="inline"
+              ><input id="log-paused" type="checkbox" /> Pause</label
+            >
+          </div>
+        </div>
+        <pre id="log-output" tabindex="0">Waiting for logs…</pre>
+        <div class="fine log-note">
+          Most recent 180 lines. Logs may include player identifiers; keep them
+          private.
+        </div>
+      </section>
+      <footer>
+        OpenFront server control · Runs locally on your PC · © OpenFront and
+        Contributors
+      </footer>
+    </main>
+    <script type="module" src="/panel.js"></script>
+  </body>
+</html>

@@ -6,15 +6,31 @@ import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  loadSettings,
+  saveSettings,
+  validateSettings,
+} from "./host-settings.mjs";
 import { routeRequest, selfhostHtml } from "./selfhost-routing.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtime = path.join(root, ".selfhost");
-const port = Number(process.env.SELFHOST_PORT || 9080);
-const workers = 2;
+const settingsFile = path.join(runtime, "settings.json");
+let settings = await loadSettings(settingsFile);
+await saveSettings(settingsFile, settings);
+const port = Number(process.env.SELFHOST_PORT || settings.port);
+const workers = settings.workers;
 const share = process.argv.includes("--share");
 const children = [];
 const sockets = new Set();
+const gameSockets = new Set();
+const startedAt = Date.now();
+let publicUrl = null;
+let requests = 0;
+let errors = 0;
+let closedBytesIn = 0;
+let closedBytesOut = 0;
+let totalLatency = 0;
 const stopToken = randomBytes(32).toString("hex");
 let stopping = false;
 await mkdir(runtime, { recursive: true });
@@ -22,7 +38,11 @@ if (!existsSync(path.join(root, "static/asset-hashes.json"))) {
   throw new Error("Build the game first: npm run build-prod");
 }
 // Refuse occupied upstream ports rather than exposing an unrelated service.
-for (const p of [port, 3000, 3001, 3002]) {
+for (const p of [
+  port,
+  3000,
+  ...Array.from({ length: workers }, (_, i) => 3001 + i),
+]) {
   await new Promise((resolve, reject) => {
     const probe = net.createServer();
     probe.once("error", () =>
@@ -43,6 +63,7 @@ const env = {
   DOMAIN: "localhost",
   GIT_COMMIT: version,
   NUM_WORKERS: String(workers),
+  SELFHOST_SETTINGS_PATH: settingsFile,
   INSTANCE_LETTER: "a",
   LOBBY_COORDINATOR: "off",
   TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
@@ -106,6 +127,91 @@ function json(res, code, data) {
 }
 const gateway = http.createServer((req, res) => {
   const url = new URL(req.url, "http://localhost");
+  if (!url.pathname.startsWith("/selfhost/")) {
+    requests++;
+    const begin = performance.now();
+    res.once("finish", () => {
+      totalLatency += performance.now() - begin;
+      if (res.statusCode >= 500) errors++;
+    });
+  }
+  if (["/selfhost/stats", "/selfhost/settings"].includes(url.pathname)) {
+    if (req.headers.authorization !== `Bearer ${stopToken}`)
+      return json(res, 404, { error: "Not found" });
+    if (url.pathname === "/selfhost/stats" && req.method === "GET") {
+      void Promise.all(
+        Array.from({ length: workers }, (_, i) =>
+          fetch(`http://127.0.0.1:${3001 + i}/api/selfhost/snapshot`, {
+            headers: { "x-api-key": env.API_KEY },
+            signal: AbortSignal.timeout(1500),
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+        ),
+      )
+        .then((snapshots) => {
+          const totals = {
+            games: 0,
+            clients: 0,
+            publicLobbies: 0,
+            listedLobbies: 0,
+          };
+          for (const snapshot of snapshots)
+            if (snapshot)
+              for (const key of Object.keys(totals))
+                totals[key] += snapshot[key];
+          json(res, 200, {
+            startedAt,
+            uptime: (Date.now() - startedAt) / 1000,
+            port,
+            workers,
+            shared: share,
+            publicUrl,
+            requests,
+            errors,
+            bytesIn:
+              closedBytesIn + [...sockets].reduce((n, s) => n + s.bytesRead, 0),
+            bytesOut:
+              closedBytesOut +
+              [...sockets].reduce((n, s) => n + s.bytesWritten, 0),
+            connections: gameSockets.size,
+            memory: process.memoryUsage().rss,
+            averageLatency: requests ? totalLatency / requests : 0,
+            workerHealth: snapshots.map(Boolean),
+            ...totals,
+            settings,
+          });
+        })
+        .catch((error) => json(res, 500, { error: error.message }));
+      return;
+    }
+    if (url.pathname === "/selfhost/settings" && req.method === "POST") {
+      void (async () => {
+        try {
+          let body = "";
+          for await (const chunk of req) {
+            body += chunk;
+            if (body.length > 16384)
+              throw new Error("Settings request too large.");
+          }
+          const next = validateSettings(JSON.parse(body));
+          await saveSettings(settingsFile, next);
+          settings = next;
+          json(res, 200, {
+            saved: true,
+            restartRequired:
+              next.port !== port ||
+              next.workers !== workers ||
+              next.share !== share,
+          });
+        } catch (error) {
+          json(res, 400, { error: error.message });
+        }
+      })();
+      return;
+    }
+    return json(res, 405, { error: "Method not allowed" });
+  }
   if (url.pathname === "/selfhost/stop") {
     if (
       req.method !== "POST" ||
@@ -152,6 +258,14 @@ const gateway = http.createServer((req, res) => {
   }
   const route = routeRequest(req.url, req.method, workers);
   if (!route) return json(res, 404, { error: "Not found" });
+  if (
+    req.method === "POST" &&
+    route.path.startsWith("/api/create_game") &&
+    !settings.allowNewLobbies
+  )
+    return json(res, 503, {
+      error: "New lobbies are temporarily disabled by the server operator.",
+    });
   const upstream = http.request(
     {
       host: "127.0.0.1",
@@ -192,12 +306,22 @@ const gateway = http.createServer((req, res) => {
 });
 gateway.on("connection", (socket) => {
   sockets.add(socket);
-  socket.on("close", () => sockets.delete(socket));
+  socket.on("close", () => {
+    closedBytesIn += socket.bytesRead;
+    closedBytesOut += socket.bytesWritten;
+    sockets.delete(socket);
+    gameSockets.delete(socket);
+  });
 });
 gateway.on("upgrade", (req, socket, head) => {
   const route = routeRequest(req.url, "GET", workers);
-  if (!route || !/^\/(?:w[01](?:\/lobbies)?|lobbies)(?:\?|$)/.test(req.url))
+  if (!route || !/^\/(?:w\d+(?:\/lobbies)?|lobbies)(?:\?|$)/.test(req.url))
     return socket.destroy();
+  if (gameSockets.size >= settings.maxConnections) {
+    socket.end("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
+    return;
+  }
+  gameSockets.add(socket);
   const upstream = http.request({
     host: "127.0.0.1",
     port: route.port,
@@ -253,11 +377,13 @@ process.on("unhandledRejection", (error) => {
   console.error(error);
   stop(1);
 });
-await Promise.all([3000, 3001, 3002].map(ready));
+await Promise.all(
+  [3000, ...Array.from({ length: workers }, (_, i) => 3001 + i)].map(ready),
+);
 await new Promise((resolve) => gateway.listen(port, "127.0.0.1", resolve));
 await writeFile(
   path.join(runtime, "control.json"),
-  JSON.stringify({ port, token: stopToken }),
+  JSON.stringify({ port, token: stopToken, pid: process.pid }),
   { mode: 0o600 },
 );
 console.log(`OpenFront on your PC: http://localhost:${port}`);
@@ -307,6 +433,7 @@ if (share) {
         serverUrl: match[0],
         updatedAt: new Date().toISOString(),
       };
+      publicUrl = match[0];
       await writeFile(
         path.join(runtime, "endpoint.json"),
         JSON.stringify(endpoint, null, 2) + "\n",

@@ -6,6 +6,38 @@ launcher and its current server address. No router port forwarding is needed.
 
 ## Start
 
+### Local control panel
+
+Double-click `Open-Server-Panel.cmd`, or run `npm run host:panel`, and open
+`http://localhost:9090`. The panel stays available when the game stops. Closing
+the browser does not stop the game or the panel.
+
+- **Start / Stop / Restart** controls the PC game server and its tunnel. Stop
+  and restart end active matches. The panel can also adopt a server started
+  earlier using the command-line launcher.
+- Monitoring shows connected game clients, worker health, games tracked,
+  WebSocket connections, uptime, HTTP traffic and errors, average response time,
+  and memory used by the gateway process. Transfer totals include gateway HTTP
+  and WebSocket traffic; they reset when the gateway restarts.
+- Port, worker count and public tunnel settings take effect on restart.
+  Connection limits and accepting new lobbies change immediately when saved.
+- Tribe count, nations, difficulty, gold multiplier and starting gold are
+  defaults for **new private lobbies**. Explicit host choices take priority;
+  already-created lobbies and running matches keep their settings.
+- After starting a new public tunnel, click **Update arcade address**. This
+  pushes only the generated server address to your website and triggers Pages
+  deployment. GitHub sign-in must be available on this PC.
+- The logs viewer has game, tunnel, launcher and publishing sources. Pause
+  freezes the view; it does not pause the server.
+
+Settings are stored in ignored `.selfhost/settings.json`. The admin panel binds
+only to `127.0.0.1:9090`, requires a local session and same-origin requests for
+actions, and is not routed through the public tunnel. The public game gateway
+keeps its admin endpoints authenticated and blocks worker monitoring routes.
+Official account/ranked-service polling is disabled for this independent host.
+
+### Command-line launcher
+
 Requirements: Node 24.15+ (24.x) and npm 12.1+ (12.x).
 
 ```powershell

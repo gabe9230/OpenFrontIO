@@ -60,6 +60,7 @@ import { setNoStoreHeaders } from "./NoStoreHeaders";
 import { PrivilegeRefresher } from "./PrivilegeRefresher";
 import { startRankedCheckinLoops } from "./RankedCheckin";
 import { rejoinOrClose } from "./Rejoin";
+import { loadSelfHostDefaults } from "./SelfHostDefaults";
 import { ServerEnv } from "./ServerEnv";
 import { SingleplayerPresence } from "./SingleplayerPresence";
 import { applyStaticAssetCacheControl } from "./StaticAssetCache";
@@ -296,26 +297,40 @@ export async function startWorker() {
 
   const gatekeeper = await loadGatekeeper(log);
   const gm = new GameManager(log, gatekeeper);
+  app.get("/api/selfhost/snapshot", (req, res) => {
+    if (
+      !process.env.SELFHOST_SETTINGS_PATH ||
+      req.headers["x-api-key"] !== ServerEnv.apiKey()
+    )
+      return res.sendStatus(404);
+    res.json({
+      games: gm.activeGames(),
+      clients: gm.activeClients(),
+      publicLobbies: gm.publicLobbies().length,
+      listedLobbies: gm.listedLobbies().length,
+    });
+  });
 
   // Initialize lobby service (handles WebSocket upgrade routing)
   const lobbyService = new WorkerLobbyService(server, wss, gm, log);
   const singleplayerPresence = new SingleplayerPresence();
 
-  setTimeout(
-    () => {
-      // The ranked loop follows the deployment-active flag the master pushes
-      // to this worker (OPE-469): a draining, standby or fenced server keeps
-      // the games it has but stops offering new matches.
-      startRankedCheckinLoops({
-        gm,
-        playlist,
-        workerId,
-        log,
-        isActive: () => lobbyService.isDeploymentActive(),
-      });
-    },
-    1000 + Math.random() * 2000,
-  );
+  if (!process.env.SELFHOST_SETTINGS_PATH)
+    setTimeout(
+      () => {
+        // The ranked loop follows the deployment-active flag the master pushes
+        // to this worker (OPE-469): a draining, standby or fenced server keeps
+        // the games it has but stops offering new matches.
+        startRankedCheckinLoops({
+          gm,
+          playlist,
+          workerId,
+          log,
+          isActive: () => lobbyService.isDeploymentActive(),
+        });
+      },
+      1000 + Math.random() * 2000,
+    );
 
   if (ServerEnv.otelEnabled()) {
     initWorkerMetrics(gm, lobbyService, singleplayerPresence);
@@ -327,7 +342,7 @@ export async function startWorker() {
     ServerEnv.jwtIssuer() + "/reserved_clan_tags",
     log,
   );
-  void privilegeRefresher.start();
+  if (!process.env.SELFHOST_SETTINGS_PATH) void privilegeRefresher.start();
 
   // Ahead of everything that can reject a request — the worker-prefix check
   // below and the rate limiter further down — so that a 404 or a 429 still
@@ -460,7 +475,11 @@ export async function startWorker() {
       return res.status(500).json({ error: "Could not allocate game id" });
     }
 
-    const game = gm.createGame(id, gc, creatorPersistentID);
+    const game = gm.createGame(
+      id,
+      { ...(await loadSelfHostDefaults()), ...gc },
+      creatorPersistentID,
+    );
     if (game === null) {
       log.warn(`cannot create game, id ${id} already exists`);
       return res.status(409).json({ error: "Game ID already exists" });

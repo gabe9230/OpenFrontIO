@@ -4,6 +4,7 @@ import { lobbyPath, inviteFromPath } from "../deployment/arcade/lobby-url.mjs";
 import { routeRequest, selfhostHtml } from "../scripts/selfhost-routing.mjs";
 
 test("worker APIs preserve queries and route to their owning worker", () => {
+  assert.equal(routeRequest("/w1/api/selfhost/snapshot"), null);
   assert.deepEqual(routeRequest("/w1/api/game/a123456789?x=1"), {
     port: 3002,
     path: "/api/game/a123456789?x=1",

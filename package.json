@@ -12,6 +12,8 @@
     "host:share": "node scripts/selfhost.mjs --share",
     "host:publish": "node scripts/publish-host-endpoint.mjs",
     "host:stop": "node scripts/stop-selfhost.mjs",
+    "host:panel": "node scripts/control-panel.mjs",
+    "test:panel": "node --import tsx --test tests/control-panel.node.mjs",
     "test:selfhost": "node --test tests/selfhost.node.mjs",
     "build-dev": "concurrently \"tsc --noEmit\" \"vite build --mode development\"",
     "build-prod": "concurrently --kill-others-on-fail \"tsc --noEmit\" \"vite build\" && tsx scripts/buildAssetHashes.ts",
