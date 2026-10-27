@@ -1,6 +1,12 @@
 import { crazyGamesSDK } from "./CrazyGamesSDK";
 import { pokiSDK } from "./PokiSDK";
 
+declare global {
+  interface Window {
+    openfrontSelfHosted?: boolean;
+  }
+}
+
 /** A signed-in portal account, as both portals report it. */
 export interface PortalUser {
   username: string;
@@ -16,6 +22,7 @@ export type GamePortalName = "crazygames" | "poki";
  * (or null/false) on the open web.
  */
 function active(): typeof crazyGamesSDK | typeof pokiSDK | null {
+  if (window.openfrontSelfHosted) return null;
   // Poki first: CrazyGames claims any iframe it can't identify.
   if (pokiSDK.isOnPoki()) return pokiSDK;
   if (crazyGamesSDK.isOnCrazyGames()) return crazyGamesSDK;
@@ -24,6 +31,7 @@ function active(): typeof crazyGamesSDK | typeof pokiSDK | null {
 
 export const gamePortal = {
   name(): GamePortalName | null {
+    if (window.openfrontSelfHosted) return null;
     if (pokiSDK.isOnPoki()) return "poki";
     if (crazyGamesSDK.isOnCrazyGames()) return "crazygames";
     return null;

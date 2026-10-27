@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>OpenFront | Gabriel's Arcade</title>
+    <meta
+      name="description"
+      content="Play OpenFront with friends. Create a lobby and share its arcade link."
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <a class="back" href="../">← Arcade</a>
+      <strong>OPENFRONT <span>COMMUNITY SERVER</span></strong>
+      <div class="actions">
+        <span id="status" role="status">Connecting…</span>
+        <button id="share" disabled>Copy lobby link</button>
+        <button id="fullscreen" disabled aria-label="Enter fullscreen">
+          ⛶
+        </button>
+      </div>
+    </header>
+    <main id="stage">
+      <section id="notice" aria-live="polite">
+        <p class="eyebrow">GABRIEL'S ARCADE</p>
+        <h1>A world worth<br />fighting for.</h1>
+        <p id="message">Connecting to the community game server…</p>
+        <button id="retry">Try again</button>
+        <p class="hint">
+          Create a private lobby in the game, then copy the lobby link above to
+          invite friends. The host's PC must be online.
+        </p>
+        <a
+          href="https://github.com/gabe9230/OpenFrontIO"
+          target="_blank"
+          rel="noopener"
+          >Game source & licensing ↗</a
+        >
+      </section>
+      <iframe
+        id="game"
+        title="OpenFront multiplayer game"
+        allow="fullscreen; clipboard-write; autoplay"
+        allowfullscreen
+        hidden
+      ></iframe>
+    </main>
+    <footer>
+      © OpenFront and Contributors · Independently hosted by Gabriel Halloran ·
+      <span id="feedback"></span>
+    </footer>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

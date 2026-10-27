@@ -8,6 +8,11 @@
     "packages/*"
   ],
   "scripts": {
+    "host": "node scripts/selfhost.mjs",
+    "host:share": "node scripts/selfhost.mjs --share",
+    "host:publish": "node scripts/publish-host-endpoint.mjs",
+    "host:stop": "node scripts/stop-selfhost.mjs",
+    "test:selfhost": "node --test tests/selfhost.test.mjs",
     "build-dev": "concurrently \"tsc --noEmit\" \"vite build --mode development\"",
     "build-prod": "concurrently --kill-others-on-fail \"tsc --noEmit\" \"vite build\" && tsx scripts/buildAssetHashes.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p packages/engine-api && tsc --noEmit -p packages/engine-lib && tsc --noEmit -p packages/engine && tsc --noEmit -p packages/engine/src/worker && tsc --noEmit -p packages/shared && tsc --noEmit -p packages/zbin",

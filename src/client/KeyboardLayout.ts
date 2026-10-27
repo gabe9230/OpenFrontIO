@@ -4,7 +4,7 @@ export type KeyboardLayoutMap = Map<string, string>;
 
 type KeyboardApi = {
   getLayoutMap(): Promise<KeyboardLayoutMap>;
-  addEventListener(event: string, callback: () => void): void;
+  addEventListener?(event: string, callback: () => void): void;
   removeEventListener?(event: string, callback: () => void): void;
 };
 
@@ -52,7 +52,7 @@ export class KeyboardLayoutController implements ReactiveController {
       const keyboard = getKeyboardApi();
       if (keyboard) {
         listeningKeyboard = keyboard;
-        keyboard.addEventListener("layoutchange", refreshGlobalLayoutMap);
+        keyboard.addEventListener?.("layoutchange", refreshGlobalLayoutMap);
       }
     }
     listeners.add(this.onUpdate);
