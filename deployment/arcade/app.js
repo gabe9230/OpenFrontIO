@@ -3,21 +3,14 @@ import { lobbyPath, inviteFromPath } from "./lobby-url.mjs";
 const frame = document.querySelector("#game");
 const notice = document.querySelector("#notice");
 const message = document.querySelector("#message");
-const status = document.querySelector("#status");
-const share = document.querySelector("#share");
-const fullscreen = document.querySelector("#fullscreen");
 let serverOrigin = null;
 let connecting = false;
-let invite = new URLSearchParams(location.search).has("lobby")
-  ? location.href
-  : null;
 let generation = 0;
 
 async function connect() {
   if (connecting) return;
   connecting = true;
   const current = ++generation;
-  status.textContent = "Connecting…";
   message.textContent = "Connecting to the community game server…";
   try {
     const configResponse = await fetch(`./server.json?t=${Date.now()}`, {
@@ -67,19 +60,13 @@ async function connect() {
     frame.src = serverOrigin + target;
     frame.hidden = false;
     notice.hidden = true;
-    fullscreen.disabled = false;
-    share.disabled = !invite;
-    status.textContent = "Server online";
   } catch (error) {
-    status.textContent = "Server offline";
     message.textContent =
       error.name === "TypeError" || error.name === "TimeoutError"
         ? "The host's PC is currently unreachable. Try again when the host starts the game server."
         : error.message;
     frame.hidden = true;
     notice.hidden = false;
-    share.disabled = true;
-    fullscreen.disabled = true;
   } finally {
     connecting = false;
   }
@@ -95,35 +82,14 @@ addEventListener("message", (event) => {
     return;
   const next = inviteFromPath(location.href, event.data.path);
   if (next) {
-    invite = next;
     history.replaceState(null, "", next);
-    share.disabled = false;
-    status.textContent = "Lobby ready · invite friends";
   } else {
     // Leaving a lobby must not leave a stale invitation in the address bar.
-    invite = null;
-    share.disabled = true;
     const url = new URL(location.href);
     url.search = "";
     url.hash = "";
     history.replaceState(null, "", url);
-    status.textContent = "Server online";
   }
-});
-share.addEventListener("click", async () => {
-  if (!invite) return;
-  try {
-    await navigator.clipboard.writeText(invite);
-    document.querySelector("#feedback").textContent = "Lobby link copied.";
-  } catch {
-    document.querySelector("#feedback").textContent =
-      "Copy the lobby link from your address bar.";
-  }
-});
-fullscreen.addEventListener("click", async () => {
-  try {
-    await document.querySelector("#stage").requestFullscreen();
-  } catch {}
 });
 document.querySelector("#retry").addEventListener("click", connect);
 addEventListener("popstate", () => {

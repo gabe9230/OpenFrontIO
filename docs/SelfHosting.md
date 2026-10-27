@@ -34,7 +34,7 @@ use another website checkout. GitHub authentication is required for the push.
 ## Play with friends
 
 Open `https://gabrielhalloran.org/Arcade/openfront/`, choose Create Lobby in
-OpenFront, and configure the match. Click **Copy lobby link** in the arcade bar.
+OpenFront, and configure the match. Copy the URL from your browser's address bar.
 Friends open that URL in their own browsers, join the lobby, and wait for the
 host to start. URLs look like:
 
@@ -45,7 +45,7 @@ https://gabrielhalloran.org/Arcade/openfront/?lobby=a123456789&s=abcde
 The query string works on GitHub Pages without custom rewrite rules. Refreshing
 or directly opening it loads the correct lobby. The game itself may also copy a
 direct tunnel invite; that link works while the tunnel address is current.
-Use the arcade bar's button for links on your website.
+Copy the browser address for links on your website.
 
 ## First install / update
 
