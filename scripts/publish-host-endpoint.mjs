@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { publicServerOnline } from "./tunnel-health.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const website =
@@ -12,10 +13,7 @@ const endpoint = JSON.parse(
 let ready = false;
 for (let attempt = 0; attempt < 20; attempt++) {
   try {
-    const health = await fetch(`${endpoint.serverUrl}/selfhost/health`, {
-      signal: AbortSignal.timeout(3000),
-    });
-    if (health.ok && (await health.json()).online) {
+    if (await publicServerOnline(endpoint.serverUrl)) {
       ready = true;
       break;
     }
